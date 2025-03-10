@@ -453,7 +453,16 @@ QuicConfig::QuicConfig()
       ack_delay_exponent_(kADE, PRESENCE_OPTIONAL),
       max_udp_payload_size_(0, PRESENCE_OPTIONAL),
       max_datagram_frame_size_(0, PRESENCE_OPTIONAL),
-      active_connection_id_limit_(0, PRESENCE_OPTIONAL) {
+      active_connection_id_limit_(0, PRESENCE_OPTIONAL),
+      // Default values for QUIX
+      client_ipv6_hopping_(false),
+      server_ipv6_hopping_(false),
+      server_hopping_prefix_size_(128),
+      client_hopping_prefix_size_(128),
+      wf_defense_enabled_(false),
+      migrate_every_n_packets_(100),
+      front_wnd_(0),
+      front_samples_(0) {
   SetDefaults();
 }
 
@@ -1523,6 +1532,30 @@ bool QuicConfig::SupportsServerPreferredAddress(Perspective perspective) const {
          HasClientSentConnectionOption(kSPAD, perspective) ||
          GetQuicFlag(quic_always_support_server_preferred_address);
 }
+
+void QuicConfig::SetClientIpv6Hopping(bool enabled) { client_ipv6_hopping_ = enabled; }
+bool QuicConfig::IsClientIpv6Hopping() const { return client_ipv6_hopping_; }
+
+void QuicConfig::SetServerIpv6Hopping(bool enabled) { server_ipv6_hopping_ = enabled; }
+bool QuicConfig::IsServerIpv6Hopping() const { return server_ipv6_hopping_; }
+
+void QuicConfig::SetMigrateEveryNPackets(int n) { migrate_every_n_packets_ = n; }
+int QuicConfig::GetMigrateEveryNPackets() const { return migrate_every_n_packets_; }
+
+void QuicConfig::SetServerHoppingPrefix(int n) { server_hopping_prefix_size_ = n; }
+int QuicConfig::GetServerHoppingPrefix() const { return server_hopping_prefix_size_; }
+
+void QuicConfig::SetClientHoppingPrefix(int n) { client_hopping_prefix_size_ = n; }
+int QuicConfig::GetClientHoppingPrefix() const { return client_hopping_prefix_size_; }
+
+void QuicConfig::SetDefenseEnabled(bool enabled) { wf_defense_enabled_ = enabled; }
+bool QuicConfig::IsDefenseEnabled() const { return wf_defense_enabled_; }
+
+void QuicConfig::SetFrontWnd(double wnd) { front_wnd_ = wnd; }
+double QuicConfig::GetFrontWnd() const { return front_wnd_; }
+
+void QuicConfig::SetFrontSamples(int n) { front_samples_ = n; }
+int QuicConfig::GetFrontSamples() const { return front_samples_; }
 
 void QuicConfig::SetReliableStreamReset(bool reliable_stream_reset) {
   reliable_stream_reset_ = reliable_stream_reset;

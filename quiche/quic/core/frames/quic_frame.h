@@ -26,6 +26,7 @@
 #include "quiche/quic/core/frames/quic_new_token_frame.h"
 #include "quiche/quic/core/frames/quic_padding_frame.h"
 #include "quiche/quic/core/frames/quic_path_challenge_frame.h"
+#include "quiche/quic/core/frames/quic_spa_frame.h"
 #include "quiche/quic/core/frames/quic_path_response_frame.h"
 #include "quiche/quic/core/frames/quic_ping_frame.h"
 #include "quiche/quic/core/frames/quic_reset_stream_at_frame.h"
@@ -74,6 +75,7 @@ struct QUICHE_EXPORT QuicFrame {
   explicit QuicFrame(QuicGoAwayFrame* frame);
   explicit QuicFrame(QuicNewConnectionIdFrame* frame);
   explicit QuicFrame(QuicRetireConnectionIdFrame* frame);
+  explicit QuicFrame(QuicSpaFrame *frame);
   explicit QuicFrame(QuicNewTokenFrame* frame);
   explicit QuicFrame(QuicMessageFrame* message_frame);
   explicit QuicFrame(QuicCryptoFrame* crypto_frame);
@@ -118,6 +120,7 @@ struct QUICHE_EXPORT QuicFrame {
         QuicGoAwayFrame* goaway_frame;
         QuicNewConnectionIdFrame* new_connection_id_frame;
         QuicRetireConnectionIdFrame* retire_connection_id_frame;
+        QuicSpaFrame* spa_frame;
         QuicMessageFrame* message_frame;
         QuicCryptoFrame* crypto_frame;
         QuicAckFrequencyFrame* ack_frequency_frame;

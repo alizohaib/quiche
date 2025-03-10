@@ -39,6 +39,7 @@ class QUICHE_EXPORT QuicConnectionAlarmsDelegate {
   virtual void OnIdleDetectorAlarm() = 0;
   virtual void OnNetworkBlackholeDetectorAlarm() = 0;
   virtual void OnPingAlarm() = 0;
+  virtual void OnCustomAlarm() = 0;
 
   virtual QuicConnectionContext* context() = 0;
   virtual const QuicClock* clock() const = 0;
@@ -78,6 +79,7 @@ enum class QuicAlarmSlot : uint8_t {
   // An alarm for QuicPingManager.
   kPing,
 
+  kCustom,
   // Must be the last element.
   kSlotCount
 };
@@ -302,6 +304,10 @@ class QUICHE_EXPORT QuicConnectionAlarmHolder {
   }
   AlarmProxy ping_alarm() { return AlarmProxy(ping_alarm_.get()); }
 
+  AlarmProxy custom_alarm() { 
+    return AlarmProxy(custom_alarm_.get()); 
+  }
+
   ConstAlarmProxy ack_alarm() const {
     return ConstAlarmProxy(ack_alarm_.get());
   }
@@ -336,6 +342,11 @@ class QUICHE_EXPORT QuicConnectionAlarmHolder {
     return ConstAlarmProxy(ping_alarm_.get());
   }
 
+  ConstAlarmProxy custom_alarm() const {
+    return ConstAlarmProxy(custom_alarm_.get());
+    // return *custom_alarm_; 
+  }
+
  private:
   // An alarm that fires when an ACK should be sent to the peer.
   QuicArenaScopedPtr<QuicAlarm> ack_alarm_;
@@ -364,6 +375,8 @@ class QUICHE_EXPORT QuicConnectionAlarmHolder {
   QuicArenaScopedPtr<QuicAlarm> network_blackhole_detector_alarm_;
   // An alarm for QuicPingManager.
   QuicArenaScopedPtr<QuicAlarm> ping_alarm_;
+
+  QuicArenaScopedPtr<QuicAlarm> custom_alarm_;
 };
 
 // A class for holding all QuicAlarms belonging to a single connection.
@@ -460,6 +473,24 @@ class QUICHE_EXPORT QuicConnectionAlarms {
     }
     return ConstAlarmProxy(
         QuicConnectionAlarmHolder::ConstAlarmProxy(holder_->ack_alarm()));
+  }
+
+  AlarmProxy custom_alarm() {
+    if (use_multiplexer_) {
+      return AlarmProxy(QuicAlarmMultiplexer::AlarmProxy(&*multiplexer_,
+                                                         QuicAlarmSlot::kCustom));
+    }
+    return AlarmProxy(
+        QuicConnectionAlarmHolder::AlarmProxy(holder_->custom_alarm()));
+  }
+  
+  ConstAlarmProxy custom_alarm() const {
+    if (use_multiplexer_) {
+      return ConstAlarmProxy(QuicAlarmMultiplexer::ConstAlarmProxy(
+          &*multiplexer_, QuicAlarmSlot::kCustom));
+    }
+    return ConstAlarmProxy(
+        QuicConnectionAlarmHolder::ConstAlarmProxy(holder_->custom_alarm()));
   }
 
   AlarmProxy retransmission_alarm() {

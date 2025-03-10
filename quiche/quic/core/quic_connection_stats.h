@@ -258,6 +258,12 @@ struct QUICHE_EXPORT QuicConnectionStats {
   std::optional<TlsServerOperationStats> tls_server_compute_signature_stats;
   std::optional<TlsServerOperationStats> tls_server_decrypt_ticket_stats;
 
+  QuicPacketCount migration_count = 0;
+
+  QuicPacketCount self_migration_count = 0;
+
+  QuicPacketCount peer_migration_count = 0;
+
   // The total number of streams which were pending from some time.
   size_t num_total_pending_streams = 0;
 

@@ -65,8 +65,13 @@ class QUIC_NO_EXPORT MasqueServerBackend : public QuicMemoryCacheBackend {
   // Unregister backend client.
   void RemoveBackendClient(QuicConnectionId connection_id);
 
+  // Update the key for the backend client.
+  void UpdateBackendClient(QuicConnectionId current_id, QuicConnectionId prev_id, 
+                           QuicConnectionId actual_id,
+                           BackendClient *backend_client);
+
   // Provides a unique client IP address for each CONNECT-IP client.
-  QuicIpAddress GetNextClientIpAddress();
+  QuicIpAddress GetNextClientIpAddress(const std::string &ip_version);
 
   // Pass in a list of key identifiers and hex-encoded public keys, separated
   // with colons and semicolons. For example: "kid1:0123...f;kid2:0123...f".
@@ -109,7 +114,14 @@ class QUIC_NO_EXPORT MasqueServerBackend : public QuicMemoryCacheBackend {
   absl::flat_hash_map<QuicConnectionId, BackendClientState,
                       QuicConnectionIdHash>
       backend_client_states_;
-  uint8_t connect_ip_next_client_ip_[4];
+
+  absl::flat_hash_map<QuicConnectionId, QuicConnectionId,
+                      QuicConnectionIdHash>
+      current_to_initial_id_;
+
+  QuicIpAddress connect_ip_next_client_ipv4_;
+  QuicIpAddress connect_ip_next_client_ipv6_;
+
   struct QUIC_NO_EXPORT ConcealedAuthCredential {
     std::string key_id;
     uint8_t public_key[ED25519_PUBLIC_KEY_LEN];

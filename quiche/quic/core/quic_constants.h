@@ -118,7 +118,7 @@ inline constexpr size_t kPublicFlagsSize = 1;
 inline constexpr size_t kQuicVersionSize = 4;
 
 // Minimum number of active connection IDs that an end point can maintain.
-inline constexpr uint32_t kMinNumOfActiveConnectionIds = 2;
+inline constexpr uint32_t kMinNumOfActiveConnectionIds = 100;
 
 // Length of the retry integrity tag in bytes.
 // https://tools.ietf.org/html/draft-ietf-quic-transport-25#section-17.2.5
@@ -306,7 +306,7 @@ inline constexpr QuicTime::Delta kAlarmGranularity =
     QuicTime::Delta::FromMilliseconds(1);
 
 // Maximum number of unretired connection IDs a connection can have.
-inline constexpr size_t kMaxNumConnectonIdsInUse = 10u;
+inline constexpr size_t kMaxNumConnectonIdsInUse = 1000u;
 
 // Packet number of first sending packet of a connection. Please note, this
 // cannot be used as first received packet because peer can choose its starting

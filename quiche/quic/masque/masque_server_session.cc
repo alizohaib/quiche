@@ -170,6 +170,16 @@ void MasqueServerSession::OnConnectionClosed(
   connect_udp_server_states_.clear();
 }
 
+void MasqueServerSession::OnEffectivePeerMigrationValidated(QuicConnectionId prev_default_path_scid)
+{
+  // std::cout << "MasqueServerSession::UpdateMasqueMap: PrevID: " << prev_default_path_scid << " CurrentID: "  << connection_id() << std::endl;
+  if (prev_default_path_scid == connection_id()) {
+    std::cout << "Previous ID is the same as the current one: " << prev_default_path_scid << std::endl;
+    return;
+  }
+  masque_server_backend_->UpdateBackendClient(connection_id(), prev_default_path_scid, connection_id(), this);
+}
+
 void MasqueServerSession::OnStreamClosed(QuicStreamId stream_id) {
   connect_udp_server_states_.remove_if(
       [stream_id](const ConnectUdpServerState& connect_udp) {
@@ -474,7 +484,9 @@ std::unique_ptr<QuicBackendResponse> MasqueServerSession::HandleMasqueRequest(
           << request_handler->stream_id();
       return CreateBackendErrorResponse("500", "Bad stream type");
     }
-    QuicIpAddress client_ip = masque_server_backend_->GetNextClientIpAddress();
+    QuicIpAddress client_ip = masque_server_backend_->GetNextClientIpAddress("4");
+    // QuicIpAddress client_ip_v6 = masque_server_backend_->GetNextClientIpAddress("6");
+
     QUIC_DLOG(INFO) << "Using client IP " << client_ip.ToString()
                     << " for CONNECT-IP stream ID "
                     << request_handler->stream_id();

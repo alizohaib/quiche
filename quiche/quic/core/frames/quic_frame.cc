@@ -13,6 +13,7 @@
 #include "quiche/quic/core/frames/quic_new_connection_id_frame.h"
 #include "quiche/quic/core/frames/quic_reset_stream_at_frame.h"
 #include "quiche/quic/core/frames/quic_retire_connection_id_frame.h"
+#include "quiche/quic/core/frames/quic_spa_frame.h"
 #include "quiche/quic/core/frames/quic_rst_stream_frame.h"
 #include "quiche/quic/core/quic_constants.h"
 #include "quiche/quic/core/quic_types.h"
@@ -65,6 +66,9 @@ QuicFrame::QuicFrame(QuicNewConnectionIdFrame* frame)
 
 QuicFrame::QuicFrame(QuicRetireConnectionIdFrame* frame)
     : type(RETIRE_CONNECTION_ID_FRAME), retire_connection_id_frame(frame) {}
+
+QuicFrame::QuicFrame(QuicSpaFrame* frame)
+    : type(SPA_FRAME), spa_frame(frame) {}
 
 QuicFrame::QuicFrame(QuicMaxStreamsFrame frame) : max_streams_frame(frame) {}
 
@@ -152,6 +156,9 @@ void DeleteFrame(QuicFrame* frame) {
     case RETIRE_CONNECTION_ID_FRAME:
       delete frame->retire_connection_id_frame;
       break;
+    case SPA_FRAME:
+      delete frame->spa_frame;
+      break;
     case MESSAGE_FRAME:
       delete frame->message_frame;
       break;
@@ -204,6 +211,7 @@ bool IsControlFrame(QuicFrameType type) {
     case STOP_SENDING_FRAME:
     case NEW_CONNECTION_ID_FRAME:
     case RETIRE_CONNECTION_ID_FRAME:
+    case SPA_FRAME:
     case HANDSHAKE_DONE_FRAME:
     case ACK_FREQUENCY_FRAME:
     case NEW_TOKEN_FRAME:
@@ -236,6 +244,8 @@ QuicControlFrameId GetControlFrameId(const QuicFrame& frame) {
       return frame.new_connection_id_frame->control_frame_id;
     case RETIRE_CONNECTION_ID_FRAME:
       return frame.retire_connection_id_frame->control_frame_id;
+    case SPA_FRAME:
+      return frame.spa_frame->control_frame_id;
     case HANDSHAKE_DONE_FRAME:
       return frame.handshake_done_frame.control_frame_id;
     case ACK_FREQUENCY_FRAME:
@@ -280,6 +290,9 @@ void SetControlFrameId(QuicControlFrameId control_frame_id, QuicFrame* frame) {
       return;
     case RETIRE_CONNECTION_ID_FRAME:
       frame->retire_connection_id_frame->control_frame_id = control_frame_id;
+      return;
+    case SPA_FRAME:
+      frame->spa_frame->control_frame_id = control_frame_id;
       return;
     case HANDSHAKE_DONE_FRAME:
       frame->handshake_done_frame.control_frame_id = control_frame_id;
@@ -327,6 +340,10 @@ QuicFrame CopyRetransmittableControlFrame(const QuicFrame& frame) {
     case RETIRE_CONNECTION_ID_FRAME:
       copy = QuicFrame(
           new QuicRetireConnectionIdFrame(*frame.retire_connection_id_frame));
+      break;
+    case SPA_FRAME:
+      copy = QuicFrame(
+          new QuicSpaFrame(*frame.spa_frame));
       break;
     case STREAMS_BLOCKED_FRAME:
       copy = QuicFrame(QuicStreamsBlockedFrame(frame.streams_blocked_frame));
@@ -435,6 +452,10 @@ QuicFrame CopyQuicFrame(quiche::QuicheBufferAllocator* allocator,
       copy = QuicFrame(
           new QuicRetireConnectionIdFrame(*frame.retire_connection_id_frame));
       break;
+    case SPA_FRAME:
+      copy = QuicFrame(
+          new QuicSpaFrame(*frame.spa_frame));
+      break;
     case HANDSHAKE_DONE_FRAME:
       copy = QuicFrame(
           QuicHandshakeDoneFrame(frame.handshake_done_frame.control_frame_id));
@@ -523,6 +544,10 @@ std::ostream& operator<<(std::ostream& os, const QuicFrame& frame) {
     case RETIRE_CONNECTION_ID_FRAME:
       os << "type { RETIRE_CONNECTION_ID } "
          << *(frame.retire_connection_id_frame);
+      break;
+    case SPA_FRAME:
+      os << "type { SPA_FRAME } "
+         << *(frame.spa_frame);
       break;
     case MAX_STREAMS_FRAME:
       os << "type { MAX_STREAMS } " << frame.max_streams_frame;

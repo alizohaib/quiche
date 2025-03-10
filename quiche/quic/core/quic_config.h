@@ -409,6 +409,30 @@ class QUICHE_EXPORT QuicConfig {
   bool HasReceivedIPv4AlternateServerAddress() const;
   const QuicSocketAddress& ReceivedIPv4AlternateServerAddress() const;
 
+  void SetClientIpv6Hopping(bool enabled);
+  bool IsClientIpv6Hopping() const;
+
+  void SetServerIpv6Hopping(bool enabled);
+  bool IsServerIpv6Hopping() const;
+
+  void SetMigrateEveryNPackets(int n);
+  int GetMigrateEveryNPackets() const;
+
+  void SetServerHoppingPrefix(int n);
+  int GetServerHoppingPrefix() const;
+
+  void SetClientHoppingPrefix(int n);
+  int GetClientHoppingPrefix() const;
+
+  void SetDefenseEnabled(bool enabled);
+  bool IsDefenseEnabled() const;
+
+  void SetFrontWnd(double wnd);
+  double GetFrontWnd() const;
+
+  void SetFrontSamples(int n);
+  int GetFrontSamples() const;
+
   // Called to set |connection_id| and |stateless_reset_token| if server
   // preferred address has been set via SetIPv(4|6)AlternateServerAddressToSend.
   // Please note, this is different from SetStatelessResetTokenToSend(const
@@ -727,6 +751,18 @@ class QUICHE_EXPORT QuicConfig {
   // Google internal handshake message.
   std::optional<std::string> google_handshake_message_to_send_;
   std::optional<std::string> received_google_handshake_message_;
+
+  bool client_ipv6_hopping_;
+  bool server_ipv6_hopping_;
+  int server_hopping_prefix_size_;
+  int client_hopping_prefix_size_;
+  
+  bool wf_defense_enabled_;
+  int migrate_every_n_packets_;
+
+  double front_wnd_;
+  int front_samples_;
+  
 
   // Support for RESET_STREAM_AT frame.
   bool reliable_stream_reset_;

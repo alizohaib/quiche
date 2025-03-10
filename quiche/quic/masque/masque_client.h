@@ -32,7 +32,7 @@ class QUIC_NO_EXPORT MasqueClient : public QuicDefaultClient,
   // lookup.
   static std::unique_ptr<MasqueClient> Create(
       const std::string& uri_template, MasqueMode masque_mode,
-      QuicEventLoop* event_loop, std::unique_ptr<ProofVerifier> proof_verifier);
+      QuicEventLoop* event_loop, const QuicConfig& config, std::unique_ptr<ProofVerifier> proof_verifier);
 
   // From QuicClient.
   std::unique_ptr<QuicSession> CreateQuicClientSession(
@@ -74,6 +74,7 @@ class QUIC_NO_EXPORT MasqueClient : public QuicDefaultClient,
   // This constructor is private, use Create() instead.
   MasqueClient(QuicSocketAddress server_address, const QuicServerId& server_id,
                MasqueMode masque_mode, QuicEventLoop* event_loop,
+               const QuicConfig& config,
                std::unique_ptr<ProofVerifier> proof_verifier,
                const std::string& uri_template);
   // Wait synchronously until we receive the peer's settings. Returns whether

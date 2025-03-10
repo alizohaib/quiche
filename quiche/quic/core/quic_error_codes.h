@@ -125,7 +125,8 @@ static_assert(static_cast<int>(QUIC_STREAM_LAST_ERROR) <=
 // These values must remain stable as they are uploaded to UMA histograms.
 // To add a new error code, use the current value of QUIC_LAST_ERROR and
 // increment QUIC_LAST_ERROR.
-enum QuicErrorCode : uint32_t {
+enum QuicErrorCode : uint32_t
+{
   QUIC_NO_ERROR = 0,
 
   // Connection has reached an invalid state.
@@ -403,6 +404,9 @@ enum QuicErrorCode : uint32_t {
   // RETIRE CONNECTION ID frame data is malformed.
   QUIC_INVALID_RETIRE_CONNECTION_ID_DATA = 117,
 
+  // SPA frame data is malformed.
+  QUIC_INVALID_SPA_DATA = 221,
+
   // Error in a received STREAMS BLOCKED frame.
   QUIC_STREAMS_BLOCKED_ERROR = 118,
   // Error in a received MAX STREAMS frame
@@ -644,7 +648,7 @@ enum QuicErrorCode : uint32_t {
   QUIC_CLIENT_LOST_NETWORK_ACCESS = 215,
 
   // No error. Used as bound while iterating.
-  QUIC_LAST_ERROR = 221,
+  QUIC_LAST_ERROR = 222,
 };
 // QuicErrorCodes is encoded as four octets on-the-wire when doing Google QUIC,
 // or a varint62 when doing IETF QUIC. Ensure that its value does not exceed

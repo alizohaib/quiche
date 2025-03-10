@@ -675,6 +675,8 @@ size_t QuicFramer::GetRetransmittableControlFrameSize(
       return GetNewConnectionIdFrameSize(*frame.new_connection_id_frame);
     case RETIRE_CONNECTION_ID_FRAME:
       return GetRetireConnectionIdFrameSize(*frame.retire_connection_id_frame);
+    case SPA_FRAME:
+      return GetSpaFrameSize(*frame.spa_frame);
     case NEW_TOKEN_FRAME:
       return GetNewTokenFrameSize(*frame.new_token_frame);
     case MAX_STREAMS_FRAME:
@@ -760,6 +762,17 @@ size_t QuicFramer::GetRetireConnectionIdFrameSize(
     const QuicRetireConnectionIdFrame& frame) {
   return kQuicFrameTypeSize +
          QuicDataWriter::GetVarInt62Len(frame.sequence_number);
+}
+
+// static
+size_t QuicFramer::GetSpaFrameSize(
+    const QuicSpaFrame& frame) {
+  
+  return kQuicFrameTypeSize +
+         frame.ipv4_address.host().ToPackedString().length() +
+         frame.ipv6_address.host().ToPackedString().length() +
+         sizeof(uint16_t) +
+         sizeof(uint16_t);
 }
 
 // static
@@ -974,6 +987,11 @@ size_t QuicFramer::BuildDataPacket(const QuicPacketHeader& header,
             "Attempt to append RETIRE_CONNECTION_ID frame and not in IETF "
             "QUIC.");
         return RaiseError(QUIC_INTERNAL_ERROR);
+      case SPA_FRAME:
+        set_detailed_error(
+            "Attempt to append SPA frame and not in IETF "
+            "QUIC.");
+        return RaiseError(QUIC_INTERNAL_ERROR);
       case NEW_TOKEN_FRAME:
         set_detailed_error(
             "Attempt to append NEW_TOKEN_ID frame and not in IETF QUIC.");
@@ -1155,6 +1173,15 @@ size_t QuicFramer::AppendIetfFrames(const QuicFrames& frames,
                                            writer)) {
           QUIC_BUG(quic_bug_10850_44)
               << "AppendRetireConnectionIdFrame failed: " << detailed_error();
+          return 0;
+        }
+        break;
+      
+      case SPA_FRAME:
+        if (!AppendSpaFrame(*frame.spa_frame,
+                                           writer)) {
+          QUIC_BUG(quic_bug_10850_53)
+              << "AppendSpaFrame failed: " << detailed_error();
           return 0;
         }
         break;
@@ -2775,7 +2802,8 @@ bool QuicFramer::IsIetfFrameTypeExpectedForEncryptionLevel(
                frame_type == IETF_HANDSHAKE_DONE ||
                frame_type == IETF_NEW_TOKEN ||
                frame_type == IETF_PATH_RESPONSE ||
-               frame_type == IETF_RETIRE_CONNECTION_ID);
+               frame_type == IETF_RETIRE_CONNECTION_ID ||
+               frame_type == IETF_SPA);
     case ENCRYPTION_FORWARD_SECURE:
       return true;
     default:
@@ -3010,6 +3038,21 @@ bool QuicFramer::ProcessIetfFrameData(QuicDataReader* reader,
                         << "Processing IETF retire connection ID frame "
                         << frame;
           if (!visitor_->OnRetireConnectionIdFrame(frame)) {
+            QUIC_DVLOG(1) << "Visitor asked to stop further processing.";
+            // Returning true since there was no parsing error.
+            return true;
+          }
+          break;
+        }
+        case IETF_SPA: {
+          QuicSpaFrame frame;
+          if (!ProcessSpaFrame(reader, &frame)) {
+            return RaiseError(QUIC_INVALID_SPA_DATA);
+          }
+          QUIC_DVLOG(2) << ENDPOINT
+                        << "Processing IETF SPA frame "
+                        << frame;
+          if (!visitor_->OnSpaFrame(frame)) {
             QUIC_DVLOG(1) << "Visitor asked to stop further processing.";
             // Returning true since there was no parsing error.
             return true;
@@ -4864,6 +4907,10 @@ bool QuicFramer::AppendTypeByte(const QuicFrame& frame,
       set_detailed_error(
           "Attempt to append RETIRE_CONNECTION_ID frame and not in IETF QUIC.");
       return RaiseError(QUIC_INTERNAL_ERROR);
+    case SPA_FRAME:
+      set_detailed_error(
+          "Attempt to append SPA frame and not in IETF QUIC.");
+      return RaiseError(QUIC_INTERNAL_ERROR);
     case NEW_TOKEN_FRAME:
       set_detailed_error(
           "Attempt to append NEW_TOKEN frame and not in IETF QUIC.");
@@ -4971,6 +5018,9 @@ bool QuicFramer::AppendIetfFrameType(const QuicFrame& frame,
       break;
     case RETIRE_CONNECTION_ID_FRAME:
       type_byte = IETF_RETIRE_CONNECTION_ID;
+      break;
+    case SPA_FRAME:
+      type_byte = IETF_SPA;
       break;
     case NEW_TOKEN_FRAME:
       type_byte = IETF_NEW_TOKEN;
@@ -6340,6 +6390,73 @@ bool QuicFramer::ProcessRetireConnectionIdFrame(
   }
   return true;
 }
+
+bool QuicFramer::AppendSpaFrame(
+    const QuicSpaFrame& frame, QuicDataWriter* writer) {
+  
+  std::string v4_address_bytes = frame.ipv4_address.host().ToPackedString();
+  std::string v6_address_bytes = frame.ipv6_address.host().ToPackedString();
+
+  // Add ipv4_address_bytes
+  if (!writer->WriteStringPiece(v4_address_bytes)){ 
+    set_detailed_error("Can not write spa frame ipv4 address.");
+    return false;
+  }
+
+  // Add ipv4_port
+  if (!writer->WriteUInt16(frame.ipv4_address.port())){
+    set_detailed_error("Can not write spa frame ipv4 address.");
+    return false;
+  }
+
+  // Add ipv6_address_bytes
+  if (!writer->WriteStringPiece(v6_address_bytes)){ 
+    set_detailed_error("Can not write spa frame ipv4 address.");
+    return false;
+  }
+
+  // Add ipv6_port
+  if (!writer->WriteUInt16(frame.ipv6_address.port())){
+    set_detailed_error("Can not write spa frame ipv4 address.");
+    return false;
+  }
+
+  return true;
+}
+
+bool QuicFramer::ProcessSpaFrame(
+    QuicDataReader* reader, QuicSpaFrame* frame) {
+  
+  uint16_t ipv4_port, ipv6_port;
+  in_addr ipv4_address;
+  in6_addr ipv6_address;
+
+  if (!reader->ReadBytes(&ipv4_address, sizeof(ipv4_address))) {
+    set_detailed_error("Can not read spa frame ipv4 address.");
+    return false;
+  }
+
+  if (!reader->ReadUInt16(&ipv4_port)){
+    set_detailed_error("Can not read spa frame ipv4 port.");
+    return false;
+  }
+
+  if (!reader->ReadBytes(&ipv6_address, sizeof(ipv6_address))) {
+    set_detailed_error("Can not read spa frame ipv6 address.");
+    return false;
+  }
+
+  if (!reader->ReadUInt16(&ipv6_port)){
+    set_detailed_error("Can not read spa frame ipv6 port.");
+    return false;
+  }
+
+  frame->ipv4_address = QuicSocketAddress(QuicIpAddress(ipv4_address), ipv4_port);
+  frame->ipv6_address = QuicSocketAddress(QuicIpAddress(ipv6_address), ipv6_port);
+
+  return true;
+}
+
 
 bool QuicFramer::ReadUint32FromVarint62(QuicDataReader* reader,
                                         QuicIetfFrameType type,

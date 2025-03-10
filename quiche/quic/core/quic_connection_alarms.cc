@@ -150,6 +150,18 @@ class PingAlarmDelegate : public QuicConnectionAlarmDelegate {
   void OnAlarm() override { connection_->OnPingAlarm(); }
 };
 
+class CustomAlarmDelegate : public QuicConnectionAlarmDelegate {
+ public:
+  using QuicConnectionAlarmDelegate::QuicConnectionAlarmDelegate;
+
+  CustomAlarmDelegate(const CustomAlarmDelegate&) = delete;
+  CustomAlarmDelegate& operator=(const CustomAlarmDelegate&) = delete;
+
+  void OnAlarm() override {
+    connection_->OnCustomAlarm();
+  }
+};
+
 class MultiplexerAlarmDelegate : public QuicAlarm::Delegate {
  public:
   explicit MultiplexerAlarmDelegate(QuicAlarmMultiplexer* multiplexer)
@@ -193,6 +205,8 @@ std::string QuicAlarmSlotName(QuicAlarmSlot slot) {
       return "NetworkBlackholeDetector";
     case QuicAlarmSlot::kPing:
       return "Ping";
+    case QuicAlarmSlot::kCustom:
+      return "Custom";
     case QuicAlarmSlot::kSlotCount:
       break;
   }
@@ -205,7 +219,7 @@ QuicAlarmMultiplexer::QuicAlarmMultiplexer(
     : deadlines_({QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero(),
                   QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero(),
                   QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero(),
-                  QuicTime::Zero(), QuicTime::Zero()}),
+                  QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero()}),
       now_alarm_(alarm_factory.CreateAlarm(
           arena.New<MultiplexerAlarmDelegate>(this), &arena)),
       later_alarm_(alarm_factory.CreateAlarm(
@@ -365,6 +379,9 @@ void QuicAlarmMultiplexer::Fire(QuicAlarmSlot slot) {
     case QuicAlarmSlot::kPing:
       connection_->OnPingAlarm();
       return;
+    case QuicAlarmSlot::kCustom:
+      connection_->OnCustomAlarm();
+      return;
     case QuicAlarmSlot::kSlotCount:
       break;
   }
@@ -400,8 +417,8 @@ void QuicAlarmMultiplexer::CancelAllAlarms() {
 }
 
 QuicConnectionAlarmHolder::QuicConnectionAlarmHolder(
-    QuicConnectionAlarmsDelegate* delegate, QuicAlarmFactory& alarm_factory,
-    QuicConnectionArena& arena)
+    QuicConnectionAlarmsDelegate *delegate, QuicAlarmFactory &alarm_factory,
+    QuicConnectionArena &arena)
     : ack_alarm_(alarm_factory.CreateAlarm(
           arena.New<AckAlarmDelegate>(delegate), &arena)),
       retransmission_alarm_(alarm_factory.CreateAlarm(
@@ -425,7 +442,9 @@ QuicConnectionAlarmHolder::QuicConnectionAlarmHolder(
       network_blackhole_detector_alarm_(alarm_factory.CreateAlarm(
           arena.New<NetworkBlackholeDetectorAlarmDelegate>(delegate), &arena)),
       ping_alarm_(alarm_factory.CreateAlarm(
-          arena.New<PingAlarmDelegate>(delegate), &arena)) {}
+          arena.New<PingAlarmDelegate>(delegate), &arena)),
+      custom_alarm_(alarm_factory.CreateAlarm(
+          arena.New<CustomAlarmDelegate>(delegate), &arena)) {}
 
 QuicConnectionAlarms::QuicConnectionAlarms(
     QuicConnectionAlarmsDelegate* delegate, QuicAlarmFactory& alarm_factory,

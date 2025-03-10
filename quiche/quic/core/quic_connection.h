@@ -185,6 +185,8 @@ class QUICHE_EXPORT QuicConnectionVisitorInterface {
   // Called to send a RETIRE_CONNECTION_ID frame.
   virtual void SendRetireConnectionId(uint64_t sequence_number) = 0;
 
+  virtual void SendSpaFrame() = 0;
+
   // Called when server starts to use a server issued connection ID. Returns
   // true if this connection ID hasn't been used by another connection.
   virtual bool MaybeReserveConnectionId(
@@ -270,6 +272,10 @@ class QUICHE_EXPORT QuicConnectionVisitorInterface {
   // Called when the client receives a preferred address from its peer.
   virtual void OnServerPreferredAddressAvailable(
       const QuicSocketAddress& server_preferred_address) = 0;
+  
+  virtual void PerformClientMigration() = 0;
+
+  virtual void OnEffectivePeerMigrationValidated(QuicConnectionId /*prev_default_path_scid*/) = 0;
 
   // Asks session to bundle data opportunistically with outgoing data.
   virtual void MaybeBundleOpportunistically() = 0;
@@ -377,6 +383,9 @@ class QUICHE_EXPORT QuicConnectionDebugVisitor
   // Called when a RetireConnectionIdFrame has been parsed.
   virtual void OnRetireConnectionIdFrame(
       const QuicRetireConnectionIdFrame& /*frame*/) {}
+
+  virtual void OnSpaFrame(
+      const QuicSpaFrame & /*frame*/) {}
 
   // Called when a NewTokenFrame has been parsed.
   virtual void OnNewTokenFrame(const QuicNewTokenFrame& /*frame*/) {}
@@ -677,6 +686,10 @@ class QUICHE_EXPORT QuicConnection
   // Called from the SendAlarmDelegate to initiate writing data.
   void OnSendAlarm() override;
 
+  void OnCustomAlarm() override;
+  void MyFunctionToCallEveryTwoSeconds();
+  // void UpdateMasqueMap();
+
   // If the socket is not blocked, writes queued packets.
   void WriteIfNotBlocked();
 
@@ -755,6 +768,8 @@ class QUICHE_EXPORT QuicConnection
   bool OnNewConnectionIdFrame(const QuicNewConnectionIdFrame& frame) override;
   bool OnRetireConnectionIdFrame(
       const QuicRetireConnectionIdFrame& frame) override;
+  bool OnSpaFrame(
+      const QuicSpaFrame &frame) override;
   bool OnNewTokenFrame(const QuicNewTokenFrame& frame) override;
   bool OnMessageFrame(const QuicMessageFrame& frame) override;
   bool OnHandshakeDoneFrame(const QuicHandshakeDoneFrame& frame) override;
@@ -1059,6 +1074,9 @@ class QUICHE_EXPORT QuicConnection
   // packet is transmitted.
   virtual bool SendConnectivityProbingPacket(
       QuicPacketWriter* probing_writer, const QuicSocketAddress& peer_address);
+
+  bool SendConnectivityProbingPacketQUIX(
+      QuicPacketWriter *probing_writer, const QuicSocketAddress &peer_address);
 
   // Disable MTU discovery on this connection.
   void DisableMtuDiscovery();
@@ -1512,7 +1530,7 @@ class QUICHE_EXPORT QuicConnection
   void StartEffectivePeerMigration(AddressChangeType type);
 
   // Called when a effective peer address migration is validated.
-  virtual void OnEffectivePeerMigrationValidated(bool is_migration_linkable);
+  virtual void OnEffectivePeerMigrationValidated(bool is_migration_linkable, QuicConnectionId prev_default_path_scid);
 
   // Get the effective peer address from the packet being processed. For proxied
   // connections, effective peer address is the address of the endpoint behind
@@ -2169,6 +2187,8 @@ class QUICHE_EXPORT QuicConnection
   bool PeerAddressChanged() const;
 
   void GenerateNewOutgoingFlowLabel();
+  
+  QuicAlarmProxy custom_alarm() { return alarms_.custom_alarm(); }
 
   QuicAlarmProxy ack_alarm() { return alarms_.ack_alarm(); }
   QuicAlarmProxy retransmission_alarm() {
@@ -2621,6 +2641,16 @@ class QUICHE_EXPORT QuicConnection
   // a PTO'd packet from a peer is detected.
   bool enable_black_hole_avoidance_via_flow_label_ = false;
 
+  bool client_ipv6_hopping_ = false;
+  bool server_ipv6_hopping_ = false;
+  int migrate_every_n_packets_ = 100;
+
+  bool wf_defense_enabled_ = false;
+
+  double front_wnd_ = 0;
+  int front_samples_ = 0;
+
+  std::vector<double> defense_schedule_;
 
   const bool quic_limit_new_streams_per_loop_2_ =
       GetQuicReloadableFlag(quic_limit_new_streams_per_loop_2);

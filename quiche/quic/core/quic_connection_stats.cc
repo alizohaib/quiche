@@ -72,6 +72,12 @@ std::ostream& operator<<(std::ostream& os, const QuicConnectionStats& s) {
      << s.failed_to_validate_server_preferred_address;
   os << " num_duplicated_packets_sent_to_server_preferred_address: "
      << s.num_duplicated_packets_sent_to_server_preferred_address;
+  os << " num_of_migrations: "
+     << s.migration_count;
+  os << " self_num_of_migrations: "
+     << s.self_migration_count;
+  os << " peer_num_of_migrations: "
+     << s.peer_migration_count;
   os << " }";
 
   return os;

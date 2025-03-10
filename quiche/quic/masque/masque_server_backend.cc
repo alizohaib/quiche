@@ -33,10 +33,11 @@ MasqueServerBackend::MasqueServerBackend(MasqueMode /*masque_mode*/,
                                          const std::string& cache_directory)
     : server_authority_(server_authority) {
   // Start with client IP 10.1.1.2.
-  connect_ip_next_client_ip_[0] = 10;
-  connect_ip_next_client_ip_[1] = 1;
-  connect_ip_next_client_ip_[2] = 1;
-  connect_ip_next_client_ip_[3] = 2;
+  // connect_ip_next_client_ip_[0] = 10;
+  // connect_ip_next_client_ip_[1] = 1;
+  // connect_ip_next_client_ip_[2] = 1;
+  // connect_ip_next_client_ip_[3] = 2;
+  connect_ip_next_client_ipv4_.FromString("10.1.1.2");
 
   if (!cache_directory.empty()) {
     QuicMemoryCacheBackend::InitializeBackend(cache_directory);
@@ -82,14 +83,20 @@ bool MasqueServerBackend::MaybeHandleMasqueRequest(
     }
   }
 
-  auto it = backend_client_states_.find(request_handler->connection_id());
-  if (it == backend_client_states_.end()) {
+  auto it = current_to_initial_id_.find(request_handler->connection_id());
+
+  BackendClient *backend_client;
+  if (it != current_to_initial_id_.end()) {
+    backend_client = backend_client_states_[it->second].backend_client;
+  }
+  else {
+
     QUIC_LOG(ERROR) << "Could not find backend client for " << masque_path
                     << request_headers.DebugString();
     return false;
   }
 
-  BackendClient* backend_client = it->second.backend_client;
+  
 
   std::unique_ptr<QuicBackendResponse> response =
       backend_client->HandleMasqueRequest(request_headers, request_handler);
@@ -103,7 +110,8 @@ bool MasqueServerBackend::MaybeHandleMasqueRequest(
                   << request_headers.DebugString();
 
   request_handler->OnResponseBackendComplete(response.get());
-  it->second.responses.emplace_back(std::move(response));
+  // it->second.responses.emplace_back(std::move(response));
+  backend_client_states_[it->second].responses.emplace_back(std::move(response));
 
   return true;
 }
@@ -144,37 +152,107 @@ void MasqueServerBackend::CloseBackendResponseStream(
 void MasqueServerBackend::RegisterBackendClient(QuicConnectionId connection_id,
                                                 BackendClient* backend_client) {
   QUIC_DLOG(INFO) << "Registering backend client for " << connection_id;
+  // QUIC_BUG_IF(quic_bug_12005_1, backend_client_states_.find(connection_id) !=
+  //                                   backend_client_states_.end())
+  //     << connection_id << " already in backend clients map";
+  // backend_client_states_[connection_id] =
+  //     BackendClientState{backend_client, {}};
+
+  // If it already exists, do nothing.
+  if (backend_client_states_.find(connection_id) != backend_client_states_.end()) {
+        return;
+  }
+
   QUIC_BUG_IF(quic_bug_12005_1, backend_client_states_.find(connection_id) !=
-                                    backend_client_states_.end())
-      << connection_id << " already in backend clients map";
+                                      backend_client_states_.end())
+        << connection_id << " already in backend clients map";
+
   backend_client_states_[connection_id] =
       BackendClientState{backend_client, {}};
+
+  current_to_initial_id_[connection_id] = connection_id;
+}
+
+void MasqueServerBackend::UpdateBackendClient(QuicConnectionId current_id, QuicConnectionId prev_id, QuicConnectionId actual_id,
+                                              BackendClient* backend_client) {
+  QUIC_DLOG(INFO) << "Updating backend client for " << prev_id;
+  auto it = current_to_initial_id_.find(prev_id);
+  if (it != current_to_initial_id_.end()) {
+    QuicConnectionId initial_id = it->second;
+    current_to_initial_id_.erase(it);
+    current_to_initial_id_[current_id] = initial_id;
+  }
 }
 
 void MasqueServerBackend::RemoveBackendClient(QuicConnectionId connection_id) {
+  
   QUIC_DLOG(INFO) << "Removing backend client for " << connection_id;
-  backend_client_states_.erase(connection_id);
+
+  auto find_it = current_to_initial_id_.find(connection_id);
+  if (find_it != current_to_initial_id_.end()) {
+      QuicConnectionId initial_id = find_it->second;
+
+      // Remove the BackendClientState
+      backend_client_states_.erase(initial_id);
+
+      // Collect all current IDs that need to be removed
+      std::vector<QuicConnectionId> ids_to_remove;
+      for (const auto& [current_id, stored_initial_id] : current_to_initial_id_) {
+          if (stored_initial_id == initial_id) {
+              ids_to_remove.push_back(current_id);
+          }
+      }
+      // Remove all collected IDs
+      for (const auto& id : ids_to_remove) {
+          current_to_initial_id_.erase(id);
+      }
+  }
+
+  QUIC_DLOG(INFO) << "Backend Client States Size: " << backend_client_states_.size();
+  QUIC_DLOG(INFO) << "current_to_initial_id_ Size: " << current_to_initial_id_.size();
 }
 
-QuicIpAddress MasqueServerBackend::GetNextClientIpAddress() {
+QuicIpAddress MasqueServerBackend::GetNextClientIpAddress(const std::string& ip_version) {
   // Makes sure all addresses are in 10.(1-254).(1-254).(2-254)
-  QuicIpAddress address;
-  address.FromPackedString(
-      reinterpret_cast<char*>(&connect_ip_next_client_ip_[0]),
-      sizeof(connect_ip_next_client_ip_));
-  connect_ip_next_client_ip_[3]++;
-  if (connect_ip_next_client_ip_[3] >= 255) {
-    connect_ip_next_client_ip_[3] = 2;
-    connect_ip_next_client_ip_[2]++;
-    if (connect_ip_next_client_ip_[2] >= 255) {
-      connect_ip_next_client_ip_[2] = 1;
-      connect_ip_next_client_ip_[1]++;
-      if (connect_ip_next_client_ip_[1] >= 255) {
-        QUIC_LOG(FATAL) << "Ran out of IP addresses, restarting process.";
-      }
-    }
+  QuicIpAddress current = (ip_version == "4") ? connect_ip_next_client_ipv4_ : connect_ip_next_client_ipv6_;
+  std::string packed = current.ToPackedString();
+
+  if (current.IsIPv4()) {
+    // IPv4: copy bytes into a 32-bit integer. 
+    uint32_t addr; 
+    memcpy(&addr, packed.data(), quic::QuicIpAddress::kIPv4AddressSize); 
+    addr = ntohl(addr); 
+    // Convert from network to host order. 
+    addr++; 
+    // Increment. 
+    addr = htonl(addr); 
+    // Convert back to network order. 
+    std::string new_packed(reinterpret_cast<char*>(&addr), QuicIpAddress::kIPv4AddressSize);
+    QuicIpAddress new_ip; 
+    if (!new_ip.FromPackedString(new_packed.data(), new_packed.size())) {
+      QUIC_LOG(FATAL) << "Ran out of IPv4 addresses, restarting process.";
+    } 
+    connect_ip_next_client_ipv4_ = new_ip;
   }
-  return address;
+  else if (current.IsIPv6()) {
+    // IPv6: copy bytes into an array and increment. 
+    std::array<uint8_t, quic::QuicIpAddress::kIPv6AddressSize> bytes;
+    memcpy(bytes.data(), packed.data(), bytes.size());
+    // Simple addition with carry propagation.
+    for (int i = bytes.size() - 1; i >= 0; --i) { 
+      if (++bytes[i] != 0) 
+      break; 
+    } 
+    std::string new_packed(reinterpret_cast<char*>(bytes.data()), bytes.size()); 
+    QuicIpAddress new_ip; 
+    if (!new_ip.FromPackedString(new_packed.data(), new_packed.size())) {
+      QUIC_LOG(FATAL) << "Ran out of IP addresses, restarting process.";
+    } 
+    connect_ip_next_client_ipv6_ = new_ip;
+  }
+  
+  return current; 
+
 }
 
 void MasqueServerBackend::SetConcealedAuth(absl::string_view concealed_auth) {

@@ -167,6 +167,10 @@ class QuicPacketPrinter : public QuicFramerVisitorInterface {
     std::cerr << "OnRetireConnectionIdFrame: " << frame;
     return true;
   }
+  bool OnSpaFrame(const QuicSpaFrame& frame) override {
+    std::cerr << "OnSpaFrame: " << frame;
+    return true;
+  }
   bool OnNewTokenFrame(const QuicNewTokenFrame& frame) override {
     std::cerr << "OnNewTokenFrame: " << frame;
     return true;

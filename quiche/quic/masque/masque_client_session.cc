@@ -76,6 +76,23 @@ MasqueClientSession::MasqueClientSession(
   (void)masque_mode_;
 }
 
+// This is a an overload of the constructor that we use in the MASQUE client
+MasqueClientSession::MasqueClientSession(
+    MasqueMode masque_mode, const std::string &uri_template,
+    const QuicConfig &config, const ParsedQuicVersionVector &supported_versions,
+    QuicConnection *connection, const QuicServerId &server_id,
+    QuicCryptoClientConfig *crypto_config, Owner *owner, QuicSession::Visitor *visitor)
+    : QuicSpdyClientSession(config, supported_versions, connection, visitor, server_id,
+                            crypto_config),
+      masque_mode_(masque_mode),
+      uri_template_(uri_template),
+      owner_(owner) {
+  // We don't currently use `masque_mode_` but will in the future. To silence
+  // clang's `-Wunused-private-field` warning for this when building QUICHE for
+  // Chrome, add a use of it here.
+  (void)masque_mode_;
+}
+
 MasqueClientSession::MasqueClientSession(
     const QuicConfig& config, const ParsedQuicVersionVector& supported_versions,
     QuicConnection* connection, const QuicServerId& server_id,
@@ -748,7 +765,8 @@ QuicSpdyClientStream* MasqueClientSession::SendGetRequest(
 
   QuicUrl url(uri_template_);
   std::string scheme = url.scheme();
-  std::string authority = url.HostPort();
+  // std::string authority = url.HostPort();
+  std::string authority = "www.example.org";
 
   QUIC_DLOG(INFO) << "Sending GET request on stream " << stream->id()
                   << " scheme=\"" << scheme << "\" authority=\"" << authority

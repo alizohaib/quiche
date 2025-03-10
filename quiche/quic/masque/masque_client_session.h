@@ -114,6 +114,12 @@ class QUIC_NO_EXPORT MasqueClientSession : public QuicSpdyClientSession,
                       QuicConnection* connection, const QuicServerId& server_id,
                       QuicCryptoClientConfig* crypto_config, Owner* owner);
 
+  MasqueClientSession(MasqueMode masque_mode, const std::string &uri_template,
+                      const QuicConfig &config,
+                      const ParsedQuicVersionVector &supported_versions,
+                      QuicConnection *connection, const QuicServerId &server_id,
+                      QuicCryptoClientConfig *crypto_config, Owner *owner, QuicSession::Visitor *visitor);
+
   // Constructor for when this is only an encapsulated session.
   MasqueClientSession(const QuicConfig& config,
                       const ParsedQuicVersionVector& supported_versions,

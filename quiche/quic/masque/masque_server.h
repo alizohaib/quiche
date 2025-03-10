@@ -16,7 +16,7 @@ namespace quic {
 class QUIC_NO_EXPORT MasqueServer : public QuicServer {
  public:
   explicit MasqueServer(MasqueMode masque_mode,
-                        MasqueServerBackend* masque_server_backend);
+                        MasqueServerBackend* masque_server_backend, quic::QuicConfig& config);
 
   // Disallow copy and assign.
   MasqueServer(const MasqueServer&) = delete;

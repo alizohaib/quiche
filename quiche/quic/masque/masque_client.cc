@@ -33,10 +33,11 @@ namespace quic {
 MasqueClient::MasqueClient(QuicSocketAddress server_address,
                            const QuicServerId& server_id,
                            MasqueMode masque_mode, QuicEventLoop* event_loop,
+                           const QuicConfig& config,
                            std::unique_ptr<ProofVerifier> proof_verifier,
                            const std::string& uri_template)
-    : QuicDefaultClient(server_address, server_id, MasqueSupportedVersions(),
-                        event_loop, std::move(proof_verifier)),
+    : QuicDefaultClient(server_address, server_id, MasqueSupportedVersions(), config,
+                        event_loop, std::make_unique<QuicClientDefaultNetworkHelper>(event_loop, this), std::move(proof_verifier)),
       masque_mode_(masque_mode),
       uri_template_(uri_template) {
   QUICHE_CHECK(!QuicUrl(uri_template_).host().empty());
@@ -72,7 +73,7 @@ std::unique_ptr<QuicSession> MasqueClient::CreateQuicClientSession(
                   << connection->connection_id();
   return std::make_unique<MasqueClientSession>(
       masque_mode_, uri_template_, *config(), supported_versions, connection,
-      server_id(), crypto_config(), this);
+      server_id(), crypto_config(), this, this);
 }
 
 MasqueClientSession* MasqueClient::masque_client_session() {
@@ -80,6 +81,7 @@ MasqueClientSession* MasqueClient::masque_client_session() {
 }
 
 QuicConnectionId MasqueClient::connection_id() {
+  // std::cout << "Calling MasqueClient::connection_id()" << std::endl;
   return masque_client_session()->connection_id();
 }
 
@@ -91,7 +93,7 @@ std::string MasqueClient::authority() const {
 // static
 std::unique_ptr<MasqueClient> MasqueClient::Create(
     const std::string& uri_template, MasqueMode masque_mode,
-    QuicEventLoop* event_loop, std::unique_ptr<ProofVerifier> proof_verifier) {
+    QuicEventLoop* event_loop, const QuicConfig& config, std::unique_ptr<ProofVerifier> proof_verifier) {
   QuicUrl url(uri_template);
   std::string host = url.host();
   if (host.empty()) {
@@ -111,7 +113,7 @@ std::unique_ptr<MasqueClient> MasqueClient::Create(
   // std::make_unique<MasqueClient>(...) because the constructor for
   // MasqueClient is private and therefore not accessible from make_unique.
   auto masque_client = absl::WrapUnique(
-      new MasqueClient(addr, server_id, masque_mode, event_loop,
+      new MasqueClient(addr, server_id, masque_mode, event_loop, config,
                        std::move(proof_verifier), uri_template));
 
   if (masque_client == nullptr) {
