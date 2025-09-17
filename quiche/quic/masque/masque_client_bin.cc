@@ -14,6 +14,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <random>
 
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"

@@ -21,6 +21,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <random>
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/escaping.h"

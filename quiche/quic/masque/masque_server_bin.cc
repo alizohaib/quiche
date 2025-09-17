@@ -100,8 +100,8 @@ int main(int argc, char* argv[]) {
 
   auto config = quic::QuicConfig();
   quic::QuicIpAddress host;
-  host.FromString(FLAGS_preferred_addr);
-  quic::QuicSocketAddress kTestServerAddress = quic::QuicSocketAddress(host, FLAGS_port);
+  host.FromString(quiche::GetQuicheCommandLineFlag(FLAGS_preferred_addr));
+  quic::QuicSocketAddress kTestServerAddress = quic::QuicSocketAddress(host, quiche::GetQuicheCommandLineFlag(FLAGS_port));
   config.SetIPv6AlternateServerAddressToSend(kTestServerAddress);
 
 //   For IPv4 Preferred Address
