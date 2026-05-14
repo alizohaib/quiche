@@ -1644,6 +1644,16 @@ void QuicSession::OnConfigNegotiated() {
   is_configured_ = true;
   connection()->OnConfigNegotiated();
 
+  // QUIX: Cache SPA state before config gets deleted in NeuterHandshakeData().
+  if (perspective_ == Perspective::IS_SERVER && !spa_state_initialized_) {
+    auto preferred = config()->GetPreferredAddressToSend(quiche::IpAddressFamily::IP_V6);
+    if (preferred.has_value()) {
+      spa_current_preferred_address_ = preferred.value();
+      spa_hopping_prefix_ = config()->GetServerHoppingPrefix();
+      spa_state_initialized_ = true;
+    }
+  }
+
   // Ask flow controllers to try again since the config could have unblocked us.
   // Or if this session is configured on TLS enabled QUIC versions,
   // attempt to retransmit 0-RTT data if there's any.
@@ -2505,43 +2515,26 @@ void QuicSession::SendSpaFrame() {
     }
   }
 
-  // Get the preferred address sent in the QUIC transport parameter i.e. Preferred Address
-  // then, pick a random address from the hopping prefix and send the SPA frame containing
-  // those IPv4 and IPv6 address. The client can act on the SPA frame.
+  if (!spa_state_initialized_) {
+    return;
+  }
 
-  // Get the address family 
-  quiche::IpAddressFamily address_family =
-      connection_->effective_peer_address()
-          .Normalized()
-          .host()
-          .address_family();
+  QuicSocketAddress old_preferred_address = spa_current_preferred_address_;
 
-  QUICHE_DCHECK_EQ(address_family, quiche::IpAddressFamily::IP_V6);
-
-  // std::cout << "QuicSession::SendSpaFrame2" << std::endl;
-  // std::cout << config_.GetPreferredAddressToSend(address_family == quiche::IpAddressFamily::IP_V4
-              // ? quiche::IpAddressFamily::IP_V4
-              // : quiche::IpAddressFamily::IP_V6).value() << std::endl;
-
-  QuicSocketAddress old_preferred_address = config()->GetPreferredAddressToSend(quiche::IpAddressFamily::IP_V6).value();
-
-   // Attempt up to three times to get a new preferred address different from the old one.
+  // Attempt up to three times to get a new preferred address different from the old one.
   QuicSocketAddress new_preferred_address_to_send = old_preferred_address;
   const int kMaxTries = 3;
   for (int i = 0; i < kMaxTries; ++i) {
     new_preferred_address_to_send = GetNewPreferredAddressToSend(old_preferred_address,
-                                                                  config()->GetServerHoppingPrefix());
+                                                                  spa_hopping_prefix_);
     if (new_preferred_address_to_send != old_preferred_address) {
       break;
     }
   }
-  // Update the preferred address in config, so there's no overlapping between the old and next preferred address
-  config()->SetIPv6AlternateServerAddressToSend(new_preferred_address_to_send);
+  // Update cached state for next SPA frame
+  spa_current_preferred_address_ = new_preferred_address_to_send;
 
-  // std::cout << "Old Preferred Address: " << old_preferred_address << std::endl;
-  // std::cout << "New Preferred Address: " << new_preferred_address_to_send << std::endl;
-  
-  QuicSocketAddress ipv4_address =  QuicSocketAddress(QuicIpAddress::Any4(), 0);
+  QuicSocketAddress ipv4_address = QuicSocketAddress(QuicIpAddress::Any4(), 0);
   control_frame_manager_.WriteOrBufferSpa(ipv4_address, new_preferred_address_to_send);
 }
 

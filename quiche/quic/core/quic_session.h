@@ -1321,6 +1321,11 @@ class QUICHE_EXPORT QuicSession
   UberQuicStreamIdManager ietf_streamid_manager_;
 
   SavedConfig saved_config_;
+
+  // QUIX: Cached SPA frame state that survives config deletion.
+  QuicSocketAddress spa_current_preferred_address_;
+  int spa_hopping_prefix_ = 0;
+  bool spa_state_initialized_ = false;
 };
 
 }  // namespace quic
