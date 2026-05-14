@@ -1,0 +1,30 @@
+# QUIX Experiment Runtime Image
+# Built in two steps by run-experiment.sh:
+#   1. Base layer with runtime deps + certs
+#   2. Binaries copied in from quiche-build container
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    openssl \
+    iproute2 \
+    iputils-ping \
+    tcpdump \
+    net-tools \
+    dnsutils \
+    ca-certificates \
+    libstdc++6 \
+    libicu74 \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Generate self-signed TLS certificate
+RUN mkdir -p /certs && \
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+      -keyout /certs/key.pem -out /certs/cert.pem -days 365 -nodes \
+      -subj "/CN=quix-server" \
+      -addext "subjectAltName=DNS:quix-server,DNS:localhost,IP:127.0.0.1,IP:::1,IP:fd00:abcd::2"
+
+# Placeholder for binaries (copied by run-experiment.sh build step)
+RUN mkdir -p /experiment
