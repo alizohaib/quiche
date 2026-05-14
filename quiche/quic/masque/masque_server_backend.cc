@@ -33,10 +33,7 @@ MasqueServerBackend::MasqueServerBackend(MasqueMode /*masque_mode*/,
                                          const std::string& cache_directory)
     : server_authority_(server_authority) {
   // Start with client IP 10.1.1.2.
-  connect_ip_next_client_ip_[0] = 10;
-  connect_ip_next_client_ip_[1] = 1;
-  connect_ip_next_client_ip_[2] = 1;
-  connect_ip_next_client_ip_[3] = 2;
+  connect_ip_next_client_ipv4_.FromString("10.1.1.2");
 
   if (!cache_directory.empty()) {
     QuicMemoryCacheBackend::InitializeBackend(cache_directory);
@@ -169,25 +166,47 @@ void MasqueServerBackend::RemoveBackendClient(BackendClient* backend_client) {
       backend_client_states_.end());
 }
 
-QuicIpAddress MasqueServerBackend::GetNextClientIpAddress() {
+QuicIpAddress MasqueServerBackend::GetNextClientIpAddress(const std::string& ip_version) {
   // Makes sure all addresses are in 10.(1-254).(1-254).(2-254)
-  QuicIpAddress address;
-  address.FromPackedString(
-      reinterpret_cast<char*>(&connect_ip_next_client_ip_[0]),
-      sizeof(connect_ip_next_client_ip_));
-  connect_ip_next_client_ip_[3]++;
-  if (connect_ip_next_client_ip_[3] >= 255) {
-    connect_ip_next_client_ip_[3] = 2;
-    connect_ip_next_client_ip_[2]++;
-    if (connect_ip_next_client_ip_[2] >= 255) {
-      connect_ip_next_client_ip_[2] = 1;
-      connect_ip_next_client_ip_[1]++;
-      if (connect_ip_next_client_ip_[1] >= 255) {
-        QUIC_LOG(FATAL) << "Ran out of IP addresses, restarting process.";
-      }
-    }
+  QuicIpAddress current = (ip_version == "4") ? connect_ip_next_client_ipv4_ : connect_ip_next_client_ipv6_;
+  std::string packed = current.ToPackedString();
+
+  if (current.IsIPv4()) {
+    // IPv4: copy bytes into a 32-bit integer. 
+    uint32_t addr; 
+    memcpy(&addr, packed.data(), quic::QuicIpAddress::kIPv4AddressSize); 
+    addr = ntohl(addr); 
+    // Convert from network to host order. 
+    addr++; 
+    // Increment. 
+    addr = htonl(addr); 
+    // Convert back to network order. 
+    std::string new_packed(reinterpret_cast<char*>(&addr), QuicIpAddress::kIPv4AddressSize);
+    QuicIpAddress new_ip; 
+    if (!new_ip.FromPackedString(new_packed.data(), new_packed.size())) {
+      QUIC_LOG(FATAL) << "Ran out of IPv4 addresses, restarting process.";
+    } 
+    connect_ip_next_client_ipv4_ = new_ip;
   }
-  return address;
+  else if (current.IsIPv6()) {
+    // IPv6: copy bytes into an array and increment. 
+    std::array<uint8_t, quic::QuicIpAddress::kIPv6AddressSize> bytes;
+    memcpy(bytes.data(), packed.data(), bytes.size());
+    // Simple addition with carry propagation.
+    for (int i = bytes.size() - 1; i >= 0; --i) { 
+      if (++bytes[i] != 0) 
+      break; 
+    } 
+    std::string new_packed(reinterpret_cast<char*>(bytes.data()), bytes.size()); 
+    QuicIpAddress new_ip; 
+    if (!new_ip.FromPackedString(new_packed.data(), new_packed.size())) {
+      QUIC_LOG(FATAL) << "Ran out of IP addresses, restarting process.";
+    } 
+    connect_ip_next_client_ipv6_ = new_ip;
+  }
+  
+  return current; 
+
 }
 
 void MasqueServerBackend::SetConcealedAuth(absl::string_view concealed_auth) {

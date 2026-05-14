@@ -98,6 +98,7 @@ class QUICHE_EXPORT QuicTimeWaitListManager
     void OnPathDegrading() override {}
     void OnConfigNegotiated(
         [[maybe_unused]] const quic::QuicConfig& config) override {}
+    void PerformClientMigration() override {}
   };
 
   // writer - the entity that writes to the socket. (Owned by the caller)

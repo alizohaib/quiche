@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <random>
 
 #include "quiche/quic/masque/masque_server.h"
 #include "quiche/quic/masque/masque_server_backend.h"
@@ -51,6 +52,26 @@ DEFINE_QUICHE_COMMAND_LINE_FLAG(
     "If set to true, enable concealed auth on all requests (such as GET) "
     "instead of just MASQUE.");
 
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    std::string, preferred_addr, "2600:3c01:e000:8e0::0",
+    "Preferred Address to send to client as Transport Parameter ");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, server_ipv6_hopping, true,
+    "If enabled, custom SPA frames will be sent to the client every n packets");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    int, send_spa_frames_every_n_packets, 50,
+    "Send custom SPA frames every N packets. Defaults to 100.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    int, preferred_addr_prefix, 124,
+    "Server's IPv6 Preferred Address Prefix");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, enable_wf_defense, false,
+    "If enabled, FRONT WF defense will be enabled on all connections.");
+
 int main(int argc, char* argv[]) {
   const char* usage = "Usage: masque_server [options]";
   std::vector<std::string> non_option_args =
@@ -77,8 +98,51 @@ int main(int argc, char* argv[]) {
   backend->SetConcealedAuthOnAllRequests(
       quiche::GetQuicheCommandLineFlag(FLAGS_concealed_auth_on_all_requests));
 
+  auto config = quic::QuicConfig();
+  quic::QuicIpAddress host;
+  host.FromString(quiche::GetQuicheCommandLineFlag(FLAGS_preferred_addr));
+  quic::QuicSocketAddress kTestServerAddress = quic::QuicSocketAddress(host, quiche::GetQuicheCommandLineFlag(FLAGS_port));
+  config.SetIPv6AlternateServerAddressToSend(kTestServerAddress);
+
+//   For IPv4 Preferred Address
+//   quic::QuicIpAddress host2;
+//   host2.FromString("45.33.41.5");
+//   quic::QuicSocketAddress kTestv4ServerAddress = quic::QuicSocketAddress(host2, FLAGS_port);
+//   config.SetIPv4AlternateServerAddressToSend(kTestv4ServerAddress);
+
+  config.SetDefenseEnabled(quiche::GetQuicheCommandLineFlag(FLAGS_enable_wf_defense));
+
+  // On the server side, server hopping is enabled by default
+  config.SetServerIpv6Hopping(quiche::GetQuicheCommandLineFlag(FLAGS_server_ipv6_hopping));
+
+  // Send SPA frames every n packets
+  config.SetMigrateEveryNPackets(quiche::GetQuicheCommandLineFlag(FLAGS_send_spa_frames_every_n_packets));
+
+  // Set the prefix for the server hopping. A random address will be sent from this prefix
+  // to the client in the SPA frame (different from the transport parameter preferred address)
+  config.SetServerHoppingPrefix(quiche::GetQuicheCommandLineFlag(FLAGS_preferred_addr_prefix));
+
+  // Initialize random number generators
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  // Set FRONT Parameters for the Server connection. Taken from the FRONT paper.
+  double w_min = 0.2;
+  double w_max = 3;
+  double n = 1000;
+
+  // Uniform distribution for generating window sizes
+  std::uniform_real_distribution<> uniform_dist(w_min, w_max);
+  double wnd_server = uniform_dist(gen);
+
+  std::uniform_int_distribution<> server_dist(1, n);
+  int server_dummy_num = server_dist(gen);
+
+  config.SetFrontWnd(wnd_server);
+  config.SetFrontSamples(server_dummy_num);
+
   auto server =
-      std::make_unique<quic::MasqueServer>(masque_mode, backend.get());
+      std::make_unique<quic::MasqueServer>(masque_mode, backend.get(), config);
 
   if (!server->CreateUDPSocketAndListen(quic::QuicSocketAddress(
           quic::QuicIpAddress::Any6(),

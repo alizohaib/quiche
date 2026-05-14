@@ -1,0 +1,32 @@
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CC=clang
+ENV CXX=clang++
+
+RUN apt-get update && apt-get install -y \
+    clang \
+    lld \
+    curl \
+    git \
+    python3 \
+    zip \
+    unzip \
+    openjdk-21-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Bazel 8.2.1 (detect architecture)
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then \
+      BAZEL_ARCH="linux-arm64"; \
+    else \
+      BAZEL_ARCH="linux-x86_64"; \
+    fi && \
+    curl -fLo /usr/local/bin/bazel "https://github.com/bazelbuild/bazel/releases/download/8.2.1/bazel-8.2.1-${BAZEL_ARCH}" && \
+    chmod +x /usr/local/bin/bazel
+
+WORKDIR /src/quiche
+COPY . .
+
+# Build masque_server and masque_client with Clang
+RUN bazel build //quiche:masque_server //quiche:masque_client --noshow_progress

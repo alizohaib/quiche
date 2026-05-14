@@ -156,6 +156,10 @@ class QUICHE_EXPORT TlsChloExtractor
       const QuicRetireConnectionIdFrame& /*frame*/) override {
     return true;
   }
+  bool OnSpaFrame(
+      const QuicSpaFrame& /*frame*/) override {
+    return true;
+  }
   bool OnNewTokenFrame(const QuicNewTokenFrame& /*frame*/) override {
     return true;
   }

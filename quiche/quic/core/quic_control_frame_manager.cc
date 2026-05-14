@@ -162,6 +162,15 @@ void QuicControlFrameManager::WriteOrBufferRetireConnectionId(
       ++last_control_frame_id_, sequence_number)));
 }
 
+void QuicControlFrameManager::WriteOrBufferSpa(
+    const QuicSocketAddress ipv4_address,
+    const QuicSocketAddress ipv6_address) {
+  QUIC_DVLOG(1) << "Writing SPA frame";
+  WriteOrBufferQuicFrame(QuicFrame(new QuicSpaFrame(
+      ++last_control_frame_id_,
+      ipv4_address, ipv6_address)));
+}
+
 void QuicControlFrameManager::WriteOrBufferNewToken(absl::string_view token) {
   QUIC_DVLOG(1) << "Writing NEW_TOKEN frame";
   WriteOrBufferQuicFrame(

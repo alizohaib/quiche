@@ -136,6 +136,10 @@ class QUICHE_EXPORT QuicDispatcher
     QUICHE_DCHECK(false);
   }
 
+  void PerformClientMigration() override {
+    QUICHE_LOG(INFO) << "PerformClientMigration(): do nothing on the server";
+  }
+
   using ReferenceCountedSessionMap =
       absl::flat_hash_map<QuicConnectionId, std::shared_ptr<QuicSession>,
                           QuicConnectionIdHash>;

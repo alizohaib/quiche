@@ -105,6 +105,8 @@ class QUICHE_EXPORT QuicSession
 
     virtual void OnServerPreferredAddressAvailable(
         const QuicSocketAddress& /*server_preferred_address*/) = 0;
+    
+    virtual void PerformClientMigration() = 0;
 
     // Called when connection detected path degrading.
     virtual void OnPathDegrading() = 0;
@@ -312,6 +314,9 @@ class QUICHE_EXPORT QuicSession
   void SendAckFrequency(const QuicAckFrequencyFrame& frame) override;
   void SendNewConnectionId(const QuicNewConnectionIdFrame& frame) override;
   void SendRetireConnectionId(uint64_t sequence_number) override;
+
+  void SendSpaFrame() override;
+
   // Returns true if server_connection_id can be issued. If returns true,
   // |visitor_| may establish a mapping from |server_connection_id| to this
   // session, if that's not desired,
@@ -348,6 +353,17 @@ class QUICHE_EXPORT QuicSession
       std::unique_ptr<QuicPathValidationContext> /*context*/) override {}
   void OnServerPreferredAddressAvailable(
       const QuicSocketAddress& /*server_preferred_address*/) override;
+  void PerformClientMigration() override;
+
+  // This is the original quic_session. do nothing here. Changes happen in the masque_server_session
+  // void UpdateMasqueMap(QuicConnectionId current_id, QuicConnectionId prev_id) override {
+  //
+  // }
+
+  void OnEffectivePeerMigrationValidated(QuicConnectionId /*prev_default_path_scid*/) override {
+    std::cout << "Do nothing" << std::endl;
+  }
+
   void MaybeBundleOpportunistically() override {}
   QuicByteCount GetFlowControlSendWindowSize(QuicStreamId id) override;
   bool MaybeMitigateWriteError(const WriteResult& write_result) override;

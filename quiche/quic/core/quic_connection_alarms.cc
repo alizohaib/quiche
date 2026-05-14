@@ -88,6 +88,8 @@ std::string QuicAlarmSlotName(QuicAlarmSlot slot) {
       return "NetworkBlackholeDetector";
     case QuicAlarmSlot::kPing:
       return "Ping";
+    case QuicAlarmSlot::kCustom:
+      return "Custom";
     case QuicAlarmSlot::kSlotCount:
       break;
   }
@@ -100,7 +102,7 @@ QuicAlarmMultiplexer::QuicAlarmMultiplexer(
     : deadlines_({QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero(),
                   QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero(),
                   QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero(),
-                  QuicTime::Zero(), QuicTime::Zero()}),
+                  QuicTime::Zero(), QuicTime::Zero(), QuicTime::Zero()}),
       now_alarm_(alarm_factory.CreateAlarm(
           arena.New<MultiplexerAlarmDelegate>(this), &arena)),
       later_alarm_(alarm_factory.CreateAlarm(
@@ -259,6 +261,9 @@ void QuicAlarmMultiplexer::Fire(QuicAlarmSlot slot) {
       return;
     case QuicAlarmSlot::kPing:
       connection_->OnPingAlarm();
+      return;
+    case QuicAlarmSlot::kCustom:
+      connection_->OnCustomAlarm();
       return;
     case QuicAlarmSlot::kSlotCount:
       break;

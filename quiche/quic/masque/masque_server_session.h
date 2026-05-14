@@ -72,6 +72,8 @@ class QUIC_NO_EXPORT MasqueServerSession
                           ConnectionCloseSource source) override;
   void OnStreamClosed(QuicStreamId stream_id) override;
 
+  void OnEffectivePeerMigrationValidated(QuicConnectionId prev_default_path_scid) override;
+
   // From MasqueServerBackend::BackendClient.
   std::unique_ptr<QuicBackendResponse> HandleMasqueRequest(
       const quiche::HttpHeaderBlock& request_headers,

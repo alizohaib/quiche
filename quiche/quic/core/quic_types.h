@@ -280,6 +280,7 @@ enum QuicFrameType : uint8_t {
   IMMEDIATE_ACK_FRAME,
   RESET_STREAM_AT_FRAME,
 
+  SPA_FRAME,
   NUM_FRAME_TYPES
 };
 
@@ -327,6 +328,7 @@ enum QuicIetfFrameType : uint64_t {
   IETF_NEW_CONNECTION_ID = 0x18,
   IETF_RETIRE_CONNECTION_ID = 0x19,
   IETF_PATH_CHALLENGE = 0x1a,
+  IETF_SPA = 0x33,
   IETF_PATH_RESPONSE = 0x1b,
   // Both of the following are "Connection Close" frames,
   // the first signals transport-layer errors, the second application-layer

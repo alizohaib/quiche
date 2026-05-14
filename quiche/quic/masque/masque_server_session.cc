@@ -190,6 +190,14 @@ void MasqueServerSession::OnConnectionClosed(
   connect_udp_server_states_.clear();
 }
 
+void MasqueServerSession::OnEffectivePeerMigrationValidated(QuicConnectionId prev_default_path_scid)
+{
+  // No-op: upstream uses session pointers for backend client lookup,
+  // so connection ID changes during migration are handled automatically.
+  QUIC_DLOG(INFO) << "Peer migration validated. prev_scid=" << prev_default_path_scid
+                  << " current_scid=" << connection_id();
+}
+
 void MasqueServerSession::OnStreamClosed(QuicStreamId stream_id) {
   connect_udp_server_states_.remove_if(
       [stream_id](const ConnectUdpServerState& connect_udp) {
@@ -516,7 +524,9 @@ std::unique_ptr<QuicBackendResponse> MasqueServerSession::HandleMasqueRequest(
           << request_handler->stream_id();
       return CreateBackendErrorResponse("500", "Bad stream type");
     }
-    QuicIpAddress client_ip = masque_server_backend_->GetNextClientIpAddress();
+    QuicIpAddress client_ip = masque_server_backend_->GetNextClientIpAddress("4");
+    // QuicIpAddress client_ip_v6 = masque_server_backend_->GetNextClientIpAddress("6");
+
     QUIC_DLOG(INFO) << "Using client IP " << client_ip.ToString()
                     << " for CONNECT-IP stream ID "
                     << request_handler->stream_id();

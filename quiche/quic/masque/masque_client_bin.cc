@@ -15,6 +15,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <random>
 
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
@@ -100,6 +101,26 @@ DEFINE_QUICHE_COMMAND_LINE_FLAG(
 DEFINE_QUICHE_COMMAND_LINE_FLAG(
     std::string, client_cert_key_file, "",
     "Path to the PEM/PKCS8-encoded client certificate private key.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, enable_wf_defense, false,
+    "If set to true, padded pings are sent based on the configuration of the  "
+    "FRONT WF defense. Defaults to false.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, client_hopping, false,
+    "If set to true, client hops to a different address"
+    "of its own");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, server_hopping, false,
+    "If set to true, client hops to a different server address"
+    "received in the preferred server address frames.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    int, migrate_every_n_packets, 100,
+    "Perform migration"
+    "every n packets. Defaults to 100.");
 
 namespace quic {
 
@@ -487,10 +508,44 @@ int RunMasqueClient(int argc, char* argv[]) {
         }
       }
 
-      masque_client = MasqueClient::Create(
-          uri_template, masque_mode, event_loop.get(),
-          std::move(proof_verifier), std::move(proof_source));
+      auto config = QuicConfig();
+      bool client_hopping = quiche::GetQuicheCommandLineFlag(FLAGS_client_hopping);
+      bool server_hopping = quiche::GetQuicheCommandLineFlag(FLAGS_server_hopping);
+      bool is_wf_defense_enabled = quiche::GetQuicheCommandLineFlag(FLAGS_enable_wf_defense);
+      int migrate_every_n_packets = quiche::GetQuicheCommandLineFlag(FLAGS_migrate_every_n_packets);
 
+      config.SetConnectionOptionsToSend(ParseQuicTagVector("SPAD"));
+      config.SetClientConnectionOptions(ParseQuicTagVector("SPAD"));
+
+      config.SetClientIpv6Hopping(client_hopping);
+      config.SetServerIpv6Hopping(server_hopping);
+
+      config.SetDefenseEnabled(is_wf_defense_enabled);
+
+      config.SetMigrateEveryNPackets(migrate_every_n_packets);
+
+      // Initialize random number generators
+      std::random_device rd;
+      std::mt19937 gen(rd());
+
+      // Set Front Parameters for the client connection here: taken from original paper.
+      double w_min = 0.2;
+      double w_max = 3;
+      double n = 1000;
+
+      // Uniform distribution for generating window sizes
+      std::uniform_real_distribution<> uniform_dist(w_min, w_max);
+      double wnd_client = uniform_dist(gen);
+
+      std::uniform_int_distribution<> client_dist(1, n);
+      int client_dummy_num = client_dist(gen);
+
+      config.SetFrontWnd(wnd_client);
+      config.SetFrontSamples(client_dummy_num);
+
+      masque_client =
+          MasqueClient::Create(uri_template, masque_mode, event_loop.get(), config,
+                               std::move(proof_verifier), std::move(proof_source));
     } else {
       masque_client = tools::CreateAndConnectMasqueEncapsulatedClient(
           masque_clients.back().get(), masque_mode, event_loop.get(),
@@ -556,7 +611,7 @@ int RunMasqueClient(int argc, char* argv[]) {
         event_loop->RunEventLoopOnce(QuicTime::Delta::FromMilliseconds(50));
       }
       // Print the response body to stdout.
-      std::cout << std::endl << stream->data() << std::endl;
+      std::string response_body = masque_client->latest_response_body();
     } else {
       // For bind, DNS has to be done on client in the encapsulated client.
       std::unique_ptr<MasqueEncapsulatedClient> encapsulated_client =

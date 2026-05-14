@@ -216,6 +216,15 @@ AddressChangeType QuicUtils::DetermineAddressChangeType(
 
   bool old_ip_is_ipv4 = old_address.host().IsIPv4() ? true : false;
   bool migrating_ip_is_ipv4 = new_address.host().IsIPv4() ? true : false;
+
+  if (!old_ip_is_ipv4 && !migrating_ip_is_ipv4) {
+      const int kSubnetMaskLengthIpv6 = 64;
+      if (old_address.host().InSameSubnet(new_address.host(), kSubnetMaskLengthIpv6)) {
+      return PORT_CHANGE;
+    }
+  }
+
+
   if (old_ip_is_ipv4 && !migrating_ip_is_ipv4) {
     return IPV4_TO_IPV6_CHANGE;
   }

@@ -574,6 +574,37 @@ void QuicClientBase::OnServerPreferredAddressAvailable(
       PathValidationReason::kServerPreferredAddressMigration);
 }
 
+void QuicClientBase::PerformClientMigration() {
+
+  if (session_->HasPendingPathValidation()) {
+    return;
+  }
+  QuicIpAddress address;
+  uint8_t address_bytes[16] = {};
+  quiche::QuicheRandom::GetInstance()->RandBytes(&address_bytes, 16);
+
+  int num_bits = 124;
+  int num_full_bytes = num_bits / 8;
+  int remaining_bits = num_bits % 8;
+
+  std::string prev_addr;
+  prev_addr = session_->self_address().host().ToPackedString();
+  memcpy(address_bytes, &prev_addr, num_full_bytes);
+
+  // If there are remaining bits, copy them
+  if (remaining_bits > 0)
+  {
+    uint8_t mask = 0xFF << (8 - remaining_bits);
+    size_t i = num_full_bytes;
+    address_bytes[i] = (address_bytes[i] & ~mask);
+  }
+
+  address.FromPackedString(reinterpret_cast<const char *>(address_bytes),
+                           sizeof(address_bytes));
+
+  ValidateAndMigrateSocket(address);
+}
+
 void QuicClientBase::OnPathDegrading() {
   if (!allow_port_migration_ ||
       session_->GetHandshakeState() != HANDSHAKE_CONFIRMED ||

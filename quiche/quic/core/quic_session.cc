@@ -48,6 +48,34 @@ namespace quic {
 
 namespace {
 
+  QuicSocketAddress GetNewPreferredAddressToSend(QuicSocketAddress prev_addr, int prefix_len) {
+
+    quiche::QuicheIpAddress address;
+    uint8_t address_bytes[16] = {};
+
+    quiche::QuicheRandom::GetInstance()->RandBytes(&address_bytes, 16);
+
+    int num_bits = prefix_len;
+    int num_full_bytes = num_bits / 8;
+    int remaining_bits = num_bits % 8;
+
+    // Copy the full bytes
+    memcpy(address_bytes, prev_addr.host().ToPackedString().data(), num_full_bytes);
+
+    // If there are remaining bits, copy them
+    if (remaining_bits > 0) {
+      uint8_t mask = 0xFF << (8 - remaining_bits);
+      size_t i = num_full_bytes;
+      address_bytes[i] = (address_bytes[i] & ~mask);
+    }
+
+    address.FromPackedString(reinterpret_cast<const char *>(address_bytes),
+                             sizeof(address_bytes));
+
+    return QuicSocketAddress(address, prev_addr.port());
+    // return address;
+  }
+
 class ClosedStreamsCleanUpDelegate : public QuicAlarm::Delegate {
  public:
   explicit ClosedStreamsCleanUpDelegate(QuicSession* session)
@@ -709,7 +737,7 @@ void QuicSession::OnForwardProgressMadeAfterPathDegrading() {}
 
 void QuicSession::OnForwardProgressMadeAfterFlowLabelChange() {}
 
-bool QuicSession::AllowSelfAddressChange() const { return false; }
+bool QuicSession::AllowSelfAddressChange() const { return true; }
 
 void QuicSession::OnWindowUpdateFrame(const QuicWindowUpdateFrame& frame) {
   // Stream may be closed by the time we receive a WINDOW_UPDATE, so we can't
@@ -2466,6 +2494,57 @@ void QuicSession::SendRetireConnectionId(uint64_t sequence_number) {
   control_frame_manager_.WriteOrBufferRetireConnectionId(sequence_number);
 }
 
+void QuicSession::SendSpaFrame() {
+  QUICHE_DCHECK_EQ(perspective_, Perspective::IS_SERVER);
+  if (GetQuicReloadableFlag(
+          quic_no_write_control_frame_upon_connection_close2)) {
+    QUIC_RELOADABLE_FLAG_COUNT(
+        quic_no_write_control_frame_upon_connection_close2);
+    if (!connection_->connected()) {
+      return;
+    }
+  }
+
+  // Get the preferred address sent in the QUIC transport parameter i.e. Preferred Address
+  // then, pick a random address from the hopping prefix and send the SPA frame containing
+  // those IPv4 and IPv6 address. The client can act on the SPA frame.
+
+  // Get the address family 
+  quiche::IpAddressFamily address_family =
+      connection_->effective_peer_address()
+          .Normalized()
+          .host()
+          .address_family();
+
+  QUICHE_DCHECK_EQ(address_family, quiche::IpAddressFamily::IP_V6);
+
+  // std::cout << "QuicSession::SendSpaFrame2" << std::endl;
+  // std::cout << config_.GetPreferredAddressToSend(address_family == quiche::IpAddressFamily::IP_V4
+              // ? quiche::IpAddressFamily::IP_V4
+              // : quiche::IpAddressFamily::IP_V6).value() << std::endl;
+
+  QuicSocketAddress old_preferred_address = config()->GetPreferredAddressToSend(quiche::IpAddressFamily::IP_V6).value();
+
+   // Attempt up to three times to get a new preferred address different from the old one.
+  QuicSocketAddress new_preferred_address_to_send = old_preferred_address;
+  const int kMaxTries = 3;
+  for (int i = 0; i < kMaxTries; ++i) {
+    new_preferred_address_to_send = GetNewPreferredAddressToSend(old_preferred_address,
+                                                                  config()->GetServerHoppingPrefix());
+    if (new_preferred_address_to_send != old_preferred_address) {
+      break;
+    }
+  }
+  // Update the preferred address in config, so there's no overlapping between the old and next preferred address
+  config()->SetIPv6AlternateServerAddressToSend(new_preferred_address_to_send);
+
+  // std::cout << "Old Preferred Address: " << old_preferred_address << std::endl;
+  // std::cout << "New Preferred Address: " << new_preferred_address_to_send << std::endl;
+  
+  QuicSocketAddress ipv4_address =  QuicSocketAddress(QuicIpAddress::Any4(), 0);
+  control_frame_manager_.WriteOrBufferSpa(ipv4_address, new_preferred_address_to_send);
+}
+
 bool QuicSession::MaybeReserveConnectionId(
     const QuicConnectionId& server_connection_id) {
   if (visitor_) {
@@ -3065,6 +3144,13 @@ void QuicSession::OnServerPreferredAddressAvailable(
 bool QuicSession::MaybeMitigateWriteError(const WriteResult& /*write_result*/) {
   QUICHE_DCHECK_EQ(perspective_, Perspective::IS_CLIENT);
   return false;
+}
+
+void QuicSession::PerformClientMigration() {
+  QUICHE_DCHECK_EQ(perspective_, Perspective::IS_CLIENT);
+  if (visitor_ != nullptr) {
+    visitor_->PerformClientMigration();
+  }
 }
 
 QuicStream* QuicSession::ProcessPendingStream(PendingStream* pending) {

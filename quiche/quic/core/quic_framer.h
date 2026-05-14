@@ -215,6 +215,9 @@ class QUICHE_EXPORT QuicFramerVisitorInterface {
   virtual bool OnRetireConnectionIdFrame(
       const QuicRetireConnectionIdFrame& frame) = 0;
 
+  virtual bool OnSpaFrame(
+      const QuicSpaFrame &frame) = 0;
+
   // Called when a NewTokenFrame has been parsed.
   virtual bool OnNewTokenFrame(const QuicNewTokenFrame& frame) = 0;
 
@@ -422,6 +425,9 @@ class QUICHE_EXPORT QuicFramer {
   // Size in bytes for a serialized retire connection id frame
   static size_t GetRetireConnectionIdFrameSize(
       const QuicRetireConnectionIdFrame& frame);
+
+  static size_t GetSpaFrameSize(
+      const QuicSpaFrame &frame);
 
   // Size in bytes for a serialized new token frame
   static size_t GetNewTokenFrameSize(const QuicNewTokenFrame& frame);
@@ -1096,6 +1102,11 @@ class QUICHE_EXPORT QuicFramer {
                                      QuicDataWriter* writer);
   bool ProcessRetireConnectionIdFrame(QuicDataReader* reader,
                                       QuicRetireConnectionIdFrame* frame);
+
+  bool AppendSpaFrame(const QuicSpaFrame &frame,
+                                     QuicDataWriter *writer);
+  bool ProcessSpaFrame(QuicDataReader *reader,
+                                      QuicSpaFrame *frame);
 
   bool AppendNewTokenFrame(const QuicNewTokenFrame& frame,
                            QuicDataWriter* writer);

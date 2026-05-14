@@ -129,6 +129,9 @@ class QUICHE_EXPORT TlsServerConnection : public TlsConnection {
   // Creates and configures an SSL_CTX that is appropriate for servers to use.
   static bssl::UniquePtr<SSL_CTX> CreateSslCtx(ProofSource* proof_source);
 
+  // Callback for key logging. Logs the line to the delegate.
+  static void KeylogCallback(const SSL *ssl, const char *line);
+
   // Invoke |configure_ssl| to configure the SSL object.
   absl::Status ConfigureSSL(
       ProofSourceHandleCallback::ConfigureSSLFunc configure_ssl);

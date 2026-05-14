@@ -110,6 +110,9 @@ class QUICHE_EXPORT QuicControlFrameManager {
   // cannot be sent immediately.
   void WriteOrBufferRetireConnectionId(uint64_t sequence_number);
 
+  void WriteOrBufferSpa(const QuicSocketAddress ipv4_address, 
+                        const QuicSocketAddress ipv6_address);
+
   // Tries to send a NEW_TOKEN frame. Buffers the frame if it cannot be sent
   // immediately.
   void WriteOrBufferNewToken(absl::string_view token);

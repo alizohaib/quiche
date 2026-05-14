@@ -19,6 +19,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <random>
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/escaping.h"
@@ -109,6 +110,42 @@ class QuicDecrypter;
 class QuicEncrypter;
 
 namespace {
+
+// This function is used to generate samples from a Rayleigh distribution used with the FRONT WF defense.
+std::vector<double> generateRayleighSamples(double sigma, int n) {
+
+  if (n <= 0) {
+      return {};
+  }
+
+  std::vector<double> samples;
+  samples.reserve(n);
+
+  // Random number generator
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_real_distribution<> dis(0.0, 1.0);
+
+  for (int i = 0; i < n; ++i) {
+      double u = dis(gen);
+      double sample = sigma * std::sqrt(-2.0 * std::log(u));
+      samples.push_back(sample);
+  }
+
+  std::sort(samples.begin(), samples.end(), std::greater<>());
+
+  // Modify the samples vector to store differences
+  for (size_t i = 0; i < samples.size() - 1; ++i) {
+      samples[i] = samples[i] - samples[i + 1];
+  }
+
+  if (samples.size() > 0){
+    samples.pop_back();
+  }
+
+  return samples;
+}
+
 
 // The minimum release time into future in ms.
 const int kMinReleaseTimeIntoFutureMs = 1;
@@ -237,6 +274,7 @@ QuicConnection::QuicConnection(
       owns_writer_(owns_writer),
       can_truncate_connection_ids_(perspective == Perspective::IS_SERVER),
       store_one_dcid_(GetQuicReloadableFlag(quic_one_dcid)),
+      front_wnd_(0), front_samples_(0),
       spin_bit_enabled_(false) {
   QUICHE_DCHECK(perspective_ == Perspective::IS_CLIENT ||
                 default_path_.self_address.IsInitialized());
@@ -409,6 +447,19 @@ bool QuicConnection::ValidateConfigConnectionIds(const QuicConfig& config) {
 
 void QuicConnection::SetFromConfig(const QuicConfig& config) {
   if (config.negotiated()) {
+
+    client_ipv6_hopping_ = config.IsClientIpv6Hopping();
+    server_ipv6_hopping_ = config.IsServerIpv6Hopping();
+    migrate_every_n_packets_ = config.GetMigrateEveryNPackets();
+
+    // Config for the FRONT WF defense
+    wf_defense_enabled_ = config.IsDefenseEnabled();
+    if (wf_defense_enabled_) {
+      front_wnd_ = config.GetFrontWnd();
+      front_samples_ = config.GetFrontSamples();
+      defense_schedule_ = generateRayleighSamples(front_wnd_, front_samples_);
+    }
+
     if (ShouldFixTimeouts(config)) {
       if (!IsHandshakeComplete()) {
         QUIC_RELOADABLE_FLAG_COUNT_N(quic_fix_timeouts, 1, 2);
@@ -2159,6 +2210,34 @@ bool QuicConnection::OnRetireConnectionIdFrame(
   return true;
 }
 
+bool QuicConnection::OnSpaFrame(const QuicSpaFrame& frame) {
+  QUIC_BUG_IF(quic_bug_10511_15, !connected_)
+      << "Processing SPA frame when connection is closed. Received packet "
+         "info: "
+      << last_received_packet_info_;
+
+  // On the Client Side, act on the SPA frame by migrating to the new
+  // preferred address, if server hopping is enabled.
+  if (perspective_ == Perspective::IS_CLIENT && IsHandshakeConfirmed() &&
+      !path_validator_.HasPendingPathValidation() && server_ipv6_hopping_ ) {
+
+      QUIC_DVLOG(1) << ENDPOINT << "Received SPA frame, migrating to new preferred address" << frame.ipv6_address;
+      if (received_server_preferred_address_.IsInitialized() && 
+          received_server_preferred_address_.host().IsIPv6()) {
+
+        // // Set this so the path validation doesn't fail
+        if (frame.ipv6_address != received_server_preferred_address_) {
+          QUIC_DVLOG(1) << ENDPOINT << "Setting the server preferred address to the random address" << frame.ipv6_address;
+          received_server_preferred_address_ = frame.ipv6_address;
+          // expected_server_preferred_address_ = frame.ipv6_address;
+          visitor_->OnServerPreferredAddressAvailable(frame.ipv6_address);
+          return true;
+        }
+      }
+  }
+  return false;
+}
+
 bool QuicConnection::OnNewTokenFrame(const QuicNewTokenFrame& frame) {
   QUIC_BUG_IF(quic_bug_12714_15, !connected_)
       << "Processing NEW_TOKEN frame when connection is closed. Received "
@@ -2853,12 +2932,13 @@ void QuicConnection::ProcessUdpPacket(const QuicSocketAddress& self_address,
     default_path_.self_address = last_received_packet_info_.destination_address;
   } else if (default_path_.self_address != self_address &&
              expected_server_preferred_address_.IsInitialized() &&
-             self_address.Normalized() ==
-                 expected_server_preferred_address_.Normalized()) {
+             self_address.host().InSameSubnet(expected_server_preferred_address_.host(), 64)) {
     // If the packet is received at the preferred address, treat it as if it is
     // received on the original server address.
     last_received_packet_info_.destination_address = default_path_.self_address;
     last_received_packet_info_.actual_destination_address = self_address;
+    // Update the expected preferred address.
+    expected_server_preferred_address_ = self_address;
   }
 
   if (!direct_peer_address_.IsInitialized()) {
@@ -2930,7 +3010,8 @@ void QuicConnection::ProcessUdpPacket(const QuicSocketAddress& self_address,
        sent_packet_manager_.GetLargestObserved() >
            highest_packet_sent_before_effective_peer_migration_)) {
     if (perspective_ == Perspective::IS_SERVER) {
-      OnEffectivePeerMigrationValidated(/*is_migration_linkable=*/true);
+      OnEffectivePeerMigrationValidated(/*is_migration_linkable=*/true,
+      /*prev_default_path_scid*/ default_path_.server_connection_id);
     }
   }
 
@@ -2940,6 +3021,28 @@ void QuicConnection::ProcessUdpPacket(const QuicSocketAddress& self_address,
   }
   SetPingAlarm();
   RetirePeerIssuedConnectionIdsNoLongerOnPath();
+
+
+  // QUIX: Server-side and 
+  // On the server side, send a SPA every N packets after handshake is confirmed.
+  // TODO: This can ideally be moved to execute when an alarm fires instead of every N packets.
+  if (perspective_ == Perspective::IS_SERVER && IsHandshakeConfirmed() && server_ipv6_hopping_) {
+    if (stats_.packets_processed % migrate_every_n_packets_ == 0) {
+      visitor_->SendSpaFrame();
+    }
+  }
+  
+  // QUIX: Client-side. Change the client's IP address every N packets after handshake is confirmed
+  // and transfer the connection to the new IP address.
+  if (perspective_ == Perspective::IS_CLIENT && IsHandshakeConfirmed() && client_ipv6_hopping_) {
+    if (stats_.packets_processed % migrate_every_n_packets_ == 0) {
+      // Tell session to perform migration. The session will then call the client_base visitor to perform the migration.
+      visitor_->PerformClientMigration();
+    }
+  }
+
+  
+
   current_packet_data_ = nullptr;
 }
 
@@ -3092,6 +3195,13 @@ bool QuicConnection::FindOnPathConnectionIds(
     *server_connection_id = alternative_path_.server_connection_id;
     return true;
   }
+
+  // This is a hacky way. Fix this later.
+  // default_path_.self_address = self_address;
+  *client_connection_id = default_path_.client_connection_id,
+  *server_connection_id = default_path_.server_connection_id;
+
+  return true;
   // Client should only send packets on either default or alternative path, so
   // it shouldn't fail here. If the server fail to find CID to use, no packet
   // will be generated on this path.
@@ -4263,6 +4373,15 @@ void QuicConnection::OnHandshakeComplete() {
     visitor_->OnServerPreferredAddressAvailable(
         received_server_preferred_address_);
   }
+
+  // Only start the FRONT WF defense alarm if the connection enabled it. This is turned off by default.
+  if (wf_defense_enabled_ && defense_schedule_.size() > 0){
+    SendConnectivityProbingPacketQUIX(writer_, peer_address());
+    double next_alarm_at = defense_schedule_.back() * 1000.0;
+    // std::cout << "Next Alarm in " <<  next_alarm_at << " seconds : " << QuicTime::Delta::FromMilliseconds(next_alarm_at) << std::endl;
+    defense_schedule_.pop_back();
+    custom_alarm().Set(clock_->ApproximateNow() + QuicTime::Delta::FromMilliseconds(next_alarm_at));
+  }
 }
 
 void QuicConnection::MaybeCreateMultiPortPath() {
@@ -5358,6 +5477,67 @@ bool QuicConnection::SendConnectivityProbingPacket(
                                 /*measure_rtt=*/true);
 }
 
+// This is used in the FRONT WF defense.
+bool QuicConnection::SendConnectivityProbingPacketQUIX(
+    QuicPacketWriter* probing_writer, const QuicSocketAddress& peer_address) {
+  QUICHE_DCHECK(peer_address.IsInitialized());
+
+  if (!connected_) {
+    QUIC_BUG(quic_bug_10511_31)
+        << "Not sending connectivity probing packet as connection is "
+        << "disconnected.";
+    return false;
+  }
+  if (perspective_ == Perspective::IS_SERVER && probing_writer == nullptr) {
+    // Server can use default packet writer to write packet.
+    probing_writer = writer_;
+  }
+  QUICHE_DCHECK(probing_writer);
+
+  if (probing_writer->IsWriteBlocked()) {
+    QUIC_DLOG(INFO)
+        << ENDPOINT
+        << "Writer blocked when sending connectivity probing packet.";
+    if (probing_writer == writer_) {
+      // Visitor should not be write blocked if the probing writer is not the
+      // default packet writer.
+      visitor_->OnWriteBlocked();
+    }
+    return true;
+  }
+
+  QUIC_DLOG(INFO) << ENDPOINT
+                  << "Sending path probe packet for connection_id = "
+                  << default_path_.server_connection_id;
+
+  std::unique_ptr<SerializedPacket> probing_packet;
+  // if (!version().HasIetfQuicFrames()) {
+    // Non-IETF QUIC, generate a padded ping regardless of whether this is a
+    // request or a response.
+    probing_packet = packet_creator_.SerializeGQuicConnectivityProbingPacket();
+  // } else {
+    // IETF QUIC path challenge.
+    // Send a path probe request using IETF QUIC PATH_CHALLENGE frame.
+    // QuicPathFrameBuffer transmitted_connectivity_probe_payload;
+    // random_generator_->RandBytes(&transmitted_connectivity_probe_payload,
+    //                              sizeof(QuicPathFrameBuffer));
+    // probing_packet =
+    //     packet_creator_.SerializePathChallengeConnectivityProbingPacket(
+    //         transmitted_connectivity_probe_payload);
+  // }
+  QUICHE_DCHECK_EQ(IsRetransmittable(*probing_packet), NO_RETRANSMITTABLE_DATA);
+
+  auto send_from_address = self_address();
+  if (perspective_ == Perspective::IS_SERVER && expected_server_preferred_address_.IsInitialized()) {
+    send_from_address = expected_server_preferred_address_;
+  }
+
+  return WritePacketUsingWriter(std::move(probing_packet), probing_writer,
+                                send_from_address, peer_address,
+                                /*measure_rtt=*/true);
+}
+
+
 bool QuicConnection::WritePacketUsingWriter(
     std::unique_ptr<SerializedPacket> packet, QuicPacketWriter* writer,
     const QuicSocketAddress& self_address,
@@ -5445,7 +5625,20 @@ void QuicConnection::OnMtuDiscoveryAlarm() {
 }
 
 void QuicConnection::OnEffectivePeerMigrationValidated(
-    bool /*is_migration_linkable*/) {
+    bool is_migration_linkable, QuicConnectionId prev_default_path_scid) {
+
+  // std::cout << "QuicConnection::OnEffectivePeerMigrationValidated. Default CID: " << default_path_.server_connection_id << " Alternative CID: " << alternative_path_.server_connection_id << " IsMigrationLinkable: " << is_migration_linkable << prev_default_path_scid << std::endl;
+  if (is_migration_linkable) {
+    // return the default path server_connection_id to the session.
+    // std::cout << "QuicConnection::OnEffectivePeerMigrationValidated. Migration Linkable" << std::endl;
+    visitor_->OnEffectivePeerMigrationValidated(default_path_.server_connection_id);
+  } else {
+    // return the previous default path
+    // std::cout << "QuicConnection::OnEffectivePeerMigrationValidated. Migration Not Linkable" << std::endl;
+    visitor_->OnEffectivePeerMigrationValidated(prev_default_path_scid);
+  }
+
+
   if (active_effective_peer_migration_type_ == NO_CHANGE) {
     QUIC_BUG(quic_bug_10511_33) << "No migration underway.";
     return;
@@ -5636,7 +5829,8 @@ void QuicConnection::StartEffectivePeerMigration(AddressChangeType type) {
     }
     OnEffectivePeerMigrationValidated(
         default_path_.server_connection_id ==
-        previous_default_path.server_connection_id);
+        previous_default_path.server_connection_id,
+        /*prev_default_path_scid*/ previous_default_path.server_connection_id);
     return;
   }
 
@@ -7152,6 +7346,20 @@ bool QuicConnection::MigratePath(const QuicSocketAddress& self_address,
   }
   MaybeClearQueuedPacketsOnPathChange();
   OnSuccessfulMigration(is_port_change);
+
+  // Since we only need these stats on the clientside
+  if (perspective_ == Perspective::IS_CLIENT) {
+    // Don't do anything if it's just a port change on either side
+    if (!is_port_change) {
+      if (self_address_change_type != NO_CHANGE) {
+        ++stats_.self_migration_count;
+      }
+      if (peer_address_change_type != NO_CHANGE) {
+        ++stats_.peer_migration_count;
+      }
+    }
+  }
+  ++stats_.migration_count;
   return true;
 }
 
@@ -7505,7 +7713,8 @@ void QuicConnection::ReversePathValidationResultDelegate::
     }
     connection_->OnEffectivePeerMigrationValidated(
         connection_->alternative_path_.server_connection_id ==
-        connection_->default_path_.server_connection_id);
+        connection_->default_path_.server_connection_id,
+        /*prev_default_path_scid*/ connection_->alternative_path_.server_connection_id);
   } else {
     QUICHE_DCHECK(connection_->IsAlternativePath(
         context->self_address(), context->effective_peer_address()));
@@ -7729,4 +7938,20 @@ bool QuicConnection::ShouldEnableSpinBit() const {
   return (r < kSpinDefaultProbability);
 }
 
+void QuicConnection::OnCustomAlarm() {
+  SendConnectivityProbingPacketQUIX(writer_, peer_address());
+
+  // Reschedule the alarm
+  if (defense_schedule_.empty()) {
+    QUIC_LOG(INFO) << "Defense schedule is empty.";
+    return;
+  }
+  double next_alarm_in = defense_schedule_.back() * 1000;
+  defense_schedule_.pop_back();
+  custom_alarm().Set(clock_->ApproximateNow() + QuicTime::Delta::FromMilliseconds(next_alarm_in));
+}
+
+void QuicConnection::MyFunctionToCallEveryTwoSeconds() {
+  QUIC_LOG(INFO) << "Custom function called every 2 seconds.";
+}
 }  // namespace quic

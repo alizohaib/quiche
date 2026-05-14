@@ -18,7 +18,7 @@
 #include "quiche/quic/core/quic_types.h"
 #include "quiche/quic/platform/api/quic_flag_utils.h"
 #include "quiche/common/platform/api/quiche_logging.h"
-
+#include <fstream>
 namespace quic {
 
 TlsServerConnection::TlsServerConnection(SSL_CTX* ssl_ctx, Delegate* delegate,
@@ -37,6 +37,8 @@ TlsServerConnection::TlsServerConnection(SSL_CTX* ssl_ctx, Delegate* delegate,
 bssl::UniquePtr<SSL_CTX> TlsServerConnection::CreateSslCtx(
     ProofSource* proof_source) {
   bssl::UniquePtr<SSL_CTX> ssl_ctx = TlsConnection::CreateSslCtx();
+
+  SSL_CTX_set_keylog_callback(ssl_ctx.get(), &KeylogCallback);
 
   // Server does not request/verify client certs by default. Individual server
   // connections may call SSL_set_custom_verify on their SSL object to request
@@ -66,6 +68,16 @@ bssl::UniquePtr<SSL_CTX> TlsServerConnection::CreateSslCtx(
 
   return ssl_ctx;
 }
+
+
+void TlsServerConnection::KeylogCallback(const SSL *ssl, const char *line) {
+  // std::cout << "[KeylogCallback]:" << line << std::endl;
+  std::ofstream Keyloggerfile("sslkeylogfile.txt", std::ios::app);
+  Keyloggerfile << line << std::endl;
+  Keyloggerfile.close();
+  return;
+}
+
 
 absl::Status TlsServerConnection::ConfigureSSL(
     ProofSourceHandleCallback::ConfigureSSLFunc configure_ssl) {
