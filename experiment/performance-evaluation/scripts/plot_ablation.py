@@ -478,9 +478,9 @@ def make_normalized_plot(all_results, frequencies, labels, title_suffix, output_
     fig, ax = plt.subplots(1, 1, figsize=(COLUMNWIDTH, COLUMNWIDTH * 0.75))
 
     scenario_styles = {
-        "server": {"color": "#2ecc71", "label": "Server Hopping"},
-        "client": {"color": "#3498db", "label": "Client Hopping"},
-        "both": {"color": "#e74c3c", "label": "Bidirectional Hopping"},
+        "server": {"color": "#4C72B0", "label": "Server Hopping"},
+        "client": {"color": "#DD8452", "label": "Client Hopping"},
+        "both": {"color": "#55A868", "label": "Bidirectional Hopping"},
     }
 
     freqs_nonzero = [f for f in frequencies if f > 0]
@@ -526,11 +526,6 @@ def make_normalized_plot(all_results, frequencies, labels, title_suffix, output_
                       color=style["color"], alpha=0.85, label=style["label"],
                       capsize=2, linewidth=0.5)
 
-        for bar, mig in zip(bars, mig_counts):
-            if bar.get_height() > 0 and mig > 0:
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 2,
-                        f"{int(mig)}", ha="center", va="bottom", fontsize=6,
-                        color=style["color"], fontweight="bold")
 
     ax.axhline(y=100, color="gray", linestyle="--", alpha=0.5, linewidth=0.8)
     ax.set_xticks(x_base)
@@ -551,9 +546,9 @@ def make_per_migration_plot(all_results, frequencies, title_suffix, output_path_
     fig, ax = plt.subplots(1, 1, figsize=(COLUMNWIDTH, COLUMNWIDTH * 0.75))
 
     scenario_styles = {
-        "server": {"color": "#2ecc71", "label": "Server SPA"},
-        "client": {"color": "#3498db", "label": "Client hopping"},
-        "both": {"color": "#e74c3c", "label": "Both"},
+        "server": {"color": "#4C72B0", "label": "Server Hopping"},
+        "client": {"color": "#DD8452", "label": "Client Hopping"},
+        "both": {"color": "#55A868", "label": "Bidirectional Hopping"},
     }
 
     freqs_nonzero = [f for f in frequencies if f > 0]
@@ -766,11 +761,10 @@ def main():
             print(f"  Saved: figures/normalized_throughput_rtt{rtt}_{pathval}.pdf")
 
 
-            # Shared style definitions for consolidated figures
             scenario_styles = {
-                "server": {"color": "#2ecc71", "marker": "o", "label": "Server SPA"},
-                "client": {"color": "#3498db", "marker": "s", "label": "Client hopping"},
-                "both": {"color": "#e74c3c", "marker": "^", "label": "Both"},
+                "server": {"color": "#4C72B0", "marker": "o", "label": "Server Hopping"},
+                "client": {"color": "#DD8452", "marker": "s", "label": "Client Hopping"},
+                "both": {"color": "#55A868", "marker": "^", "label": "Bidirectional Hopping"},
             }
             freqs_nonzero = [f for f in frequencies if f > 0]
             x_positions = list(range(len(freqs_nonzero)))
