@@ -1,0 +1,54 @@
+\section{Performance Evaluation}
+\label{sec:evaluation}
+
+We evaluate the throughput overhead of QUIX address hopping across three configurations: server-side hopping (using repeated Server Preferred Address frames), client-side hopping (QUIC connection migration), and bidirectional hopping (both simultaneously). Our goal is to determine whether continuous address randomization imposes prohibitive cost on bulk transfers.
+
+\subsection{Experimental Setup}
+
+We deploy QUIX on three AWS EC2 instances across two regions to capture realistic wide-area network conditions:
+
+\begin{itemize}
+    \item \textbf{Client} (\texttt{t3.medium}, us-west-1): Initiates a MASQUE Connect-IP tunnel through the proxy and downloads a 100\,MB file from the origin.
+    \item \textbf{Proxy} (\texttt{t3.medium}, us-east-1): Runs the QUIX-enabled MASQUE server. Performs server-side address hopping via SPA frames and handles client migration path validation.
+    \item \textbf{Origin} (\texttt{t3.micro}, us-east-1): Serves the test file over HTTP through the tunnel.
+\end{itemize}
+
+The cross-region path between client and proxy exhibits a round-trip time of approximately 58\,ms, representative of a typical VPN user connecting to a nearby relay. Both the proxy and client are assigned /80 IPv6 prefixes (from their respective subnet delegations), configured via Linux AnyIP (\texttt{ip -6 route add local <prefix>::/80 dev lo}), providing $2^{48}$ routable addresses per endpoint. AWS source/destination checking is disabled on both instances to permit traffic on non-primary addresses.
+
+We test seven migration frequencies: a no-hopping baseline (0\,ms) and timer intervals of 10, 25, 50, 100, 500, and 1000\,ms. Each configuration is repeated 5 times, for a total of 105 runs (3 modes $\times$ 7 frequencies $\times$ 5 runs). For each run, we capture the full packet trace on the client interface and embed TLS session keys into the resulting pcapng file for offline decryption. We measure wire-level throughput from the captures using \texttt{capinfos} (total data bytes divided by capture duration) and count actual address migrations by tracking IPv6 source address changes per direction in the trace.
+
+\subsection{Results}
+
+\paragraph{Throughput impact is negligible.}
+Figure~\ref{fig:normalized-throughput} shows throughput as a percentage of the no-hopping baseline for each mode and frequency. Across all configurations, throughput remains within 80--120\% of baseline, with median values consistently above 90\%. Even at the most aggressive setting (10\,ms interval), where the system performs up to 937 server hops or 815 client hops during a single 100\,MB transfer, throughput degradation is modest: 19.6\% for server hopping, 4.8\% for client hopping, and 8.4\% for bidirectional hopping.
+
+At practical migration intervals ($\geq$50\,ms), no configuration exhibits statistically significant throughput loss relative to the baseline. The inter-quartile range of measurements across runs (5--10\,Mbps on a $\sim$60\,Mbps link) is comparable to the natural variance of the no-hopping baseline itself, indicating that the overhead of address changes is lost in the noise of network jitter.
+
+\paragraph{Client hopping is cheaper than server hopping.}
+Per-hop analysis reveals that client-initiated migration costs approximately $0.006\%$ throughput per address change, while server-side SPA hopping costs $0.020\%$ per hop---a 3.4$\times$ difference. This disparity arises from the protocol mechanics: server hopping requires transmitting an SPA frame, triggering a PATH\_CHALLENGE from the client to the new server address, awaiting a PATH\_RESPONSE, and provisioning fresh connection IDs for both directions ($\sim$5 control packets per hop). Client hopping requires only a PATH\_CHALLENGE from the server and a PATH\_RESPONSE ($\sim$2.5 control packets per hop). Despite this difference, both mechanisms achieve negligible absolute overhead because the control packets are small ($<$200 bytes) relative to data packets ($\sim$1364 bytes), comprising under 6\% of total wire bytes even at the highest hop rate.
+
+\paragraph{Path validation bounds the effective hop rate.}
+QUIC's path validation mechanism (PATH\_CHALLENGE/RESPONSE) imposes a natural ceiling on the achievable migration rate. At 58\,ms RTT, the maximum validated hop rate is approximately 17 hops/second (one per RTT). However, our implementation pipelines migrations: a new hop timer fires independently of whether the previous path validation has completed. When the timer interval is shorter than the RTT (e.g., 10\,ms), pending validations are skipped, yielding an effective rate of $\sim$50 hops/second for client hopping and $\sim$52 hops/second for server hopping. This pipelining ensures that the data path is never blocked waiting for validation---traffic continues on the current validated path until the next migration completes.
+
+\paragraph{Bidirectional hopping does not compound overhead.}
+When both endpoints hop simultaneously at the same timer interval, the total migration count is roughly the sum of the individual modes (e.g., 478 client + 363 server = 841 total at 10\,ms). However, throughput loss (8.4\%) is less than the sum of individual losses (19.6\% + 4.8\% = 24.4\%), suggesting that some control traffic is amortized when both directions share PATH\_CHALLENGE/RESPONSE exchanges.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/normalized_throughput_rtt58_validate.pdf}
+    \caption{Throughput relative to the no-hopping baseline across migration frequencies. Numbers above bars indicate actual address changes observed in packet captures. Even at the most aggressive 10\,ms interval ($>$800 hops per transfer), throughput remains above 80\% of baseline.}
+    \label{fig:normalized-throughput}
+\end{figure}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/throughput_rtt58_validate.pdf}
+    \caption{Absolute wire throughput across migration frequencies. The dashed line indicates the baseline median. All modes sustain 50--70\,Mbps regardless of hop rate, demonstrating that QUIX address hopping introduces no meaningful throughput penalty on a 58\,ms RTT path.}
+    \label{fig:absolute-throughput}
+\end{figure}
+
+\subsection{Discussion}
+
+Our results demonstrate that QUIX can sustain hundreds of address changes per connection with negligible impact on bulk transfer throughput. The key insight is that QUIC's connection migration and path validation mechanisms are inherently lightweight: control frames are small, validation is asynchronous (data continues flowing on the old path), and the protocol already anticipates address changes as a first-class operation.
+
+The practical implication for deployment is that operators can configure aggressive hopping intervals (50--100\,ms) to maximize unlinkability without measurable throughput cost. At these intervals, a 15-second bulk transfer undergoes 150--300 address changes on each endpoint, presenting a rapidly shifting set of network identifiers to any observer while delivering data at full link speed.

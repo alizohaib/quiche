@@ -1,0 +1,1 @@
+{"freq": 500, "run": 5, "mode": "client", "duration_ms": 12064, "exit_code": 0, "hash_verified": true, "hash": "5b31448712872eb4d26d275f20c66e10", "client_migrations": 25, "server_migrations": 1, "wire_throughput_mbps": 75.18, "wire_data_bytes": 124001322, "wire_duration_s": 13.194}
