@@ -1,0 +1,236 @@
+============================================
+  QUIX AWS Ablation Study
+  Frequencies: 0 100 250 500 1000 2000 5000 ms
+  Runs per config: 3
+  Client: 13.56.226.30 (us-west-1)
+  Proxy:  3.88.159.86 (us-east-1)
+  Server: 54.226.82.155 (us-east-1)
+  RTT: ~58ms (real cross-region)
+  Bandwidth: uncapped
+============================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Mode: server
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [server] NO MIGRATION (baseline) × 3 runs
+    Starting proxy (mode=server, freq=0ms)...
+  Run 1/3:
+    {"freq": 0, "run": 1, "mode": "server", "duration_ms": 17883, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 0, "run": 2, "mode": "server", "duration_ms": 18029, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 0, "run": 3, "mode": "server", "duration_ms": 15973, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [server] Every 100ms × 3 runs
+    Starting proxy (mode=server, freq=100ms)...
+  Run 1/3:
+    {"freq": 100, "run": 1, "mode": "server", "duration_ms": 17651, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 100, "run": 2, "mode": "server", "duration_ms": 14593, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 100, "run": 3, "mode": "server", "duration_ms": 14410, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [server] Every 250ms × 3 runs
+    Starting proxy (mode=server, freq=250ms)...
+  Run 1/3:
+    {"freq": 250, "run": 1, "mode": "server", "duration_ms": 15115, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 250, "run": 2, "mode": "server", "duration_ms": 12402, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 250, "run": 3, "mode": "server", "duration_ms": 15335, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [server] Every 500ms × 3 runs
+    Starting proxy (mode=server, freq=500ms)...
+  Run 1/3:
+    {"freq": 500, "run": 1, "mode": "server", "duration_ms": 17285, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 500, "run": 2, "mode": "server", "duration_ms": 13295, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 500, "run": 3, "mode": "server", "duration_ms": 14139, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [server] Every 1000ms × 3 runs
+    Starting proxy (mode=server, freq=1000ms)...
+  Run 1/3:
+    {"freq": 1000, "run": 1, "mode": "server", "duration_ms": 15474, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 1000, "run": 2, "mode": "server", "duration_ms": 13006, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 1000, "run": 3, "mode": "server", "duration_ms": 14992, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [server] Every 2000ms × 3 runs
+    Starting proxy (mode=server, freq=2000ms)...
+  Run 1/3:
+    {"freq": 2000, "run": 1, "mode": "server", "duration_ms": 17830, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 2000, "run": 2, "mode": "server", "duration_ms": 17962, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 2000, "run": 3, "mode": "server", "duration_ms": 18064, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [server] Every 5000ms × 3 runs
+    Starting proxy (mode=server, freq=5000ms)...
+  Run 1/3:
+    {"freq": 5000, "run": 1, "mode": "server", "duration_ms": 16663, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 5000, "run": 2, "mode": "server", "duration_ms": 18369, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 5000, "run": 3, "mode": "server", "duration_ms": 17894, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Mode: client
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [client] NO MIGRATION (baseline) × 3 runs
+    Starting proxy (mode=client, freq=0ms)...
+  Run 1/3:
+    {"freq": 0, "run": 1, "mode": "client", "duration_ms": 15731, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 0, "run": 2, "mode": "client", "duration_ms": 14400, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 0, "run": 3, "mode": "client", "duration_ms": 15756, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [client] Every 100ms × 3 runs
+    Starting proxy (mode=client, freq=100ms)...
+  Run 1/3:
+    {"freq": 100, "run": 1, "mode": "client", "duration_ms": 15335, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 100, "run": 2, "mode": "client", "duration_ms": 16272, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 100, "run": 3, "mode": "client", "duration_ms": 13272, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [client] Every 250ms × 3 runs
+    Starting proxy (mode=client, freq=250ms)...
+  Run 1/3:
+    {"freq": 250, "run": 1, "mode": "client", "duration_ms": 14839, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 250, "run": 2, "mode": "client", "duration_ms": 15154, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 250, "run": 3, "mode": "client", "duration_ms": 16319, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [client] Every 500ms × 3 runs
+    Starting proxy (mode=client, freq=500ms)...
+  Run 1/3:
+    {"freq": 500, "run": 1, "mode": "client", "duration_ms": 13340, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 500, "run": 2, "mode": "client", "duration_ms": 13060, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 500, "run": 3, "mode": "client", "duration_ms": 14373, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [client] Every 1000ms × 3 runs
+    Starting proxy (mode=client, freq=1000ms)...
+  Run 1/3:
+    {"freq": 1000, "run": 1, "mode": "client", "duration_ms": 12227, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 1000, "run": 2, "mode": "client", "duration_ms": 16191, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 1000, "run": 3, "mode": "client", "duration_ms": 16728, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [client] Every 2000ms × 3 runs
+    Starting proxy (mode=client, freq=2000ms)...
+  Run 1/3:
+    {"freq": 2000, "run": 1, "mode": "client", "duration_ms": 15481, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 2000, "run": 2, "mode": "client", "duration_ms": 16774, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 2000, "run": 3, "mode": "client", "duration_ms": 13943, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [client] Every 5000ms × 3 runs
+    Starting proxy (mode=client, freq=5000ms)...
+  Run 1/3:
+    {"freq": 5000, "run": 1, "mode": "client", "duration_ms": 17450, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 5000, "run": 2, "mode": "client", "duration_ms": 17942, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 5000, "run": 3, "mode": "client", "duration_ms": 18581, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Mode: both
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [both] NO MIGRATION (baseline) × 3 runs
+    Starting proxy (mode=both, freq=0ms)...
+  Run 1/3:
+    {"freq": 0, "run": 1, "mode": "both", "duration_ms": 15295, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 0, "run": 2, "mode": "both", "duration_ms": 11850, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 0, "run": 3, "mode": "both", "duration_ms": 18357, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [both] Every 100ms × 3 runs
+    Starting proxy (mode=both, freq=100ms)...
+  Run 1/3:
+    {"freq": 100, "run": 1, "mode": "both", "duration_ms": 18407, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 100, "run": 2, "mode": "both", "duration_ms": 16794, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 100, "run": 3, "mode": "both", "duration_ms": 18958, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [both] Every 250ms × 3 runs
+    Starting proxy (mode=both, freq=250ms)...
+  Run 1/3:
+    {"freq": 250, "run": 1, "mode": "both", "duration_ms": 16313, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 250, "run": 2, "mode": "both", "duration_ms": 17027, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 250, "run": 3, "mode": "both", "duration_ms": 17454, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [both] Every 500ms × 3 runs
+    Starting proxy (mode=both, freq=500ms)...
+  Run 1/3:
+    {"freq": 500, "run": 1, "mode": "both", "duration_ms": 23781, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 500, "run": 2, "mode": "both", "duration_ms": 15948, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 500, "run": 3, "mode": "both", "duration_ms": 600009, "exit_code": 28, "hash_verified": false, "hash": "881933b5c53f18142b4e7e79c34b4303"}
+
+  [both] Every 1000ms × 3 runs
+    Starting proxy (mode=both, freq=1000ms)...
+  Run 1/3:
+    {"freq": 1000, "run": 1, "mode": "both", "duration_ms": 14023, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 1000, "run": 2, "mode": "both", "duration_ms": 17513, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 1000, "run": 3, "mode": "both", "duration_ms": 12771, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [both] Every 2000ms × 3 runs
+    Starting proxy (mode=both, freq=2000ms)...
+  Run 1/3:
+    {"freq": 2000, "run": 1, "mode": "both", "duration_ms": 14836, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 2000, "run": 2, "mode": "both", "duration_ms": 13573, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 2000, "run": 3, "mode": "both", "duration_ms": 15406, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+  [both] Every 5000ms × 3 runs
+    Starting proxy (mode=both, freq=5000ms)...
+  Run 1/3:
+    {"freq": 5000, "run": 1, "mode": "both", "duration_ms": 17674, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 2/3:
+    {"freq": 5000, "run": 2, "mode": "both", "duration_ms": 16637, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+  Run 3/3:
+    {"freq": 5000, "run": 3, "mode": "both", "duration_ms": 17150, "exit_code": 0, "hash_verified": true, "hash": "00f5331a33e26b0c2fbcdf77a98133f0"}
+
+[*] Generating plots...
+  Detected file size: 100 MB
+
+============================================================
+  RTT = 58ms
+============================================================
+
+  --- Path Validation: validate ---
+
+  === Server-Side SPA Hopping (validate) ===
+
+  === Client-Side Hopping (validate) ===
+
+  === Both Server + Client Hopping (validate) ===
+
+============================================================
+  Generating Consolidated Figures -> /data/figures/
+============================================================
+
+Done.
+
+Done. Results in: /Users/alizohaib/Desktop/quix-final/quiche/experiment/output-aws/
+Figures in: /Users/alizohaib/Desktop/quix-final/quiche/experiment/output-aws/figures/

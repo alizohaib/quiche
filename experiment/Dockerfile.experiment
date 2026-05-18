@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     libstdc++6 \
     libicu74 \
+    iptables \
+    curl \
+    python3 \
     bash \
     && rm -rf /var/lib/apt/lists/*
 
@@ -24,7 +27,7 @@ RUN mkdir -p /certs && \
     openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
       -keyout /certs/key.pem -out /certs/cert.pem -days 365 -nodes \
       -subj "/CN=quix-server" \
-      -addext "subjectAltName=DNS:quix-server,DNS:localhost,IP:127.0.0.1,IP:::1,IP:fd00:abcd::2"
+      -addext "subjectAltName=DNS:quix-server,DNS:localhost,IP:127.0.0.1,IP:::1,IP:fd00::2,IP:fd00:abcd::2"
 
 # Placeholder for binaries (copied by run-experiment.sh build step)
 RUN mkdir -p /experiment

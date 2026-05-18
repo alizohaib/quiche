@@ -65,6 +65,11 @@ DEFINE_QUICHE_COMMAND_LINE_FLAG(
     "Send custom SPA frames every N packets. Defaults to 100.");
 
 DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    int, send_spa_frames_every_n_ms, 0,
+    "Send custom SPA frames every N milliseconds. "
+    "If set to > 0, overrides send_spa_frames_every_n_packets.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
     int, preferred_addr_prefix, 124,
     "Server's IPv6 Preferred Address Prefix");
 
@@ -115,8 +120,9 @@ int main(int argc, char* argv[]) {
   // On the server side, server hopping is enabled by default
   config.SetServerIpv6Hopping(quiche::GetQuicheCommandLineFlag(FLAGS_server_ipv6_hopping));
 
-  // Send SPA frames every n packets
+  // Send SPA frames every n packets (or ms if time-based is set)
   config.SetMigrateEveryNPackets(quiche::GetQuicheCommandLineFlag(FLAGS_send_spa_frames_every_n_packets));
+  config.SetMigrateEveryNMs(quiche::GetQuicheCommandLineFlag(FLAGS_send_spa_frames_every_n_ms));
 
   // Set the prefix for the server hopping. A random address will be sent from this prefix
   // to the client in the SPA frame (different from the transport parameter preferred address)

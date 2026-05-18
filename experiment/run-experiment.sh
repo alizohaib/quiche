@@ -83,6 +83,7 @@ if [ "$NO_BUILD" = false ]; then
   BUILD_CID=$(docker create quiche-build)
   docker cp "$BUILD_CID:/src/quiche/bazel-bin/quiche/masque_server" "$TEMP_DIR/masque_server"
   docker cp "$BUILD_CID:/src/quiche/bazel-bin/quiche/masque_client" "$TEMP_DIR/masque_client"
+  docker cp "$BUILD_CID:/src/quiche/bazel-bin/quiche/quic_server" "$TEMP_DIR/quic_server"
   docker rm "$BUILD_CID" >/dev/null
 
   cp "$SCRIPT_DIR/run-client.sh" "$TEMP_DIR/run-client.sh"
@@ -91,8 +92,9 @@ if [ "$NO_BUILD" = false ]; then
 FROM quix-experiment-base
 COPY masque_server /usr/local/bin/masque_server
 COPY masque_client /usr/local/bin/masque_client
+COPY quic_server /usr/local/bin/quic_server
 COPY run-client.sh /experiment/run-client.sh
-RUN chmod +x /usr/local/bin/masque_server /usr/local/bin/masque_client /experiment/run-client.sh
+RUN chmod +x /usr/local/bin/masque_server /usr/local/bin/masque_client /usr/local/bin/quic_server /experiment/run-client.sh
 EOF
 
   docker build -t quix-experiment -f "$TEMP_DIR/Dockerfile.final" "$TEMP_DIR"

@@ -460,10 +460,13 @@ QuicConfig::QuicConfig()
       // Default values for QUIX
       client_ipv6_hopping_(false),
       server_ipv6_hopping_(false),
+      skip_path_validation_(false),
+      skip_cwnd_reset_(false),
       server_hopping_prefix_size_(128),
       client_hopping_prefix_size_(128),
       wf_defense_enabled_(false),
       migrate_every_n_packets_(100),
+      migrate_every_n_ms_(0),
       front_wnd_(0),
       front_samples_(0) {
   SetDefaults();
@@ -576,7 +579,7 @@ bool QuicConfig::HasClientRequestedIndependentOption(
 
 const QuicTagVector& QuicConfig::ClientRequestedIndependentOptions(
     Perspective perspective) const {
-  static constexpr QuicTagVector no_options;
+  static const QuicTagVector no_options;
   if (perspective == Perspective::IS_SERVER) {
     return HasReceivedConnectionOptions() ? ReceivedConnectionOptions()
                                           : no_options;
@@ -1544,8 +1547,17 @@ bool QuicConfig::IsClientIpv6Hopping() const { return client_ipv6_hopping_; }
 void QuicConfig::SetServerIpv6Hopping(bool enabled) { server_ipv6_hopping_ = enabled; }
 bool QuicConfig::IsServerIpv6Hopping() const { return server_ipv6_hopping_; }
 
+void QuicConfig::SetSkipPathValidation(bool enabled) { skip_path_validation_ = enabled; }
+bool QuicConfig::IsSkipPathValidation() const { return skip_path_validation_; }
+
+void QuicConfig::SetSkipCwndReset(bool enabled) { skip_cwnd_reset_ = enabled; }
+bool QuicConfig::IsSkipCwndReset() const { return skip_cwnd_reset_; }
+
 void QuicConfig::SetMigrateEveryNPackets(int n) { migrate_every_n_packets_ = n; }
 int QuicConfig::GetMigrateEveryNPackets() const { return migrate_every_n_packets_; }
+
+void QuicConfig::SetMigrateEveryNMs(int ms) { migrate_every_n_ms_ = ms; }
+int QuicConfig::GetMigrateEveryNMs() const { return migrate_every_n_ms_; }
 
 void QuicConfig::SetServerHoppingPrefix(int n) { server_hopping_prefix_size_ = n; }
 int QuicConfig::GetServerHoppingPrefix() const { return server_hopping_prefix_size_; }

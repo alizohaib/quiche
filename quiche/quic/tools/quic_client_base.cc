@@ -556,6 +556,11 @@ void QuicClientBase::ValidateNewNetwork(const QuicIpAddress& host) {
 
 void QuicClientBase::OnServerPreferredAddressAvailable(
     const QuicSocketAddress& server_preferred_address) {
+  if (config_.IsSkipPathValidation()) {
+    session()->connection()->MigratePathForSpa(server_preferred_address);
+    return;
+  }
+
   const auto self_address = session_->self_address();
   if (network_helper_ == nullptr ||
       !network_helper_->CreateUDPSocketAndBind(server_preferred_address,
@@ -566,6 +571,7 @@ void QuicClientBase::OnServerPreferredAddressAvailable(
   if (writer == nullptr) {
     return;
   }
+
   session()->ValidatePath(
       std::make_unique<PathMigrationContext>(
           std::unique_ptr<QuicPacketWriter>(writer),
@@ -575,34 +581,49 @@ void QuicClientBase::OnServerPreferredAddressAvailable(
 }
 
 void QuicClientBase::PerformClientMigration() {
-
+  if (!connected()) {
+    return;
+  }
   if (session_->HasPendingPathValidation()) {
     return;
   }
+
   QuicIpAddress address;
   uint8_t address_bytes[16] = {};
   quiche::QuicheRandom::GetInstance()->RandBytes(&address_bytes, 16);
 
-  int num_bits = 124;
+  int num_bits = 120;
   int num_full_bytes = num_bits / 8;
   int remaining_bits = num_bits % 8;
 
-  std::string prev_addr;
-  prev_addr = session_->self_address().host().ToPackedString();
-  memcpy(address_bytes, &prev_addr, num_full_bytes);
+  std::string prev_addr = session_->self_address().host().ToPackedString();
+  memcpy(address_bytes, prev_addr.data(), num_full_bytes);
 
-  // If there are remaining bits, copy them
-  if (remaining_bits > 0)
-  {
+  if (remaining_bits > 0) {
     uint8_t mask = 0xFF << (8 - remaining_bits);
     size_t i = num_full_bytes;
     address_bytes[i] = (address_bytes[i] & ~mask);
   }
 
-  address.FromPackedString(reinterpret_cast<const char *>(address_bytes),
+  address.FromPackedString(reinterpret_cast<const char*>(address_bytes),
                            sizeof(address_bytes));
 
-  ValidateAndMigrateSocket(address);
+  if (config_.IsSkipPathValidation()) {
+    // Lightweight migration: new socket+writer, no CID consumption, no
+    // path validation. Used when hopping within the same subnet.
+    std::unique_ptr<QuicPacketWriter> writer =
+        CreateWriterForNewNetwork(address, local_port_);
+    if (writer == nullptr) {
+      return;
+    }
+    QuicSocketAddress new_self_address =
+        network_helper_->GetLatestClientAddress();
+    session()->connection()->MigrateSelfAddressForHopping(
+        new_self_address, writer.release(), /*owns_writer=*/true);
+  } else {
+    // Standard migration: path validation with new CIDs.
+    ValidateAndMigrateSocket(address);
+  }
 }
 
 void QuicClientBase::OnPathDegrading() {

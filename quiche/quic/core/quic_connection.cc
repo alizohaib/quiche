@@ -450,7 +450,10 @@ void QuicConnection::SetFromConfig(const QuicConfig& config) {
 
     client_ipv6_hopping_ = config.IsClientIpv6Hopping();
     server_ipv6_hopping_ = config.IsServerIpv6Hopping();
+    skip_path_validation_ = config.IsSkipPathValidation();
+    skip_cwnd_reset_ = config.IsSkipCwndReset();
     migrate_every_n_packets_ = config.GetMigrateEveryNPackets();
+    migrate_every_n_ms_ = config.GetMigrateEveryNMs();
 
     // Config for the FRONT WF defense
     wf_defense_enabled_ = config.IsDefenseEnabled();
@@ -1215,7 +1218,13 @@ void QuicConnection::OnSuccessfulMigration(bool is_port_change) {
 
   // TODO(b/159074035): notify SentPacketManger with RTT sample from probing.
   if (version().IsIetfQuic() && !is_port_change) {
-    sent_packet_manager_.OnConnectionMigration(/*reset_send_algorithm=*/true);
+    if (skip_cwnd_reset_ && server_ipv6_hopping_) {
+      // SPA migration within the same subnet — path characteristics are
+      // unchanged, so preserve congestion state, RTT estimates, and in-flight
+      // tracking. Only reset PTO count.
+    } else {
+      sent_packet_manager_.OnConnectionMigration(/*reset_send_algorithm=*/true);
+    }
   }
 }
 
@@ -2219,21 +2228,25 @@ bool QuicConnection::OnSpaFrame(const QuicSpaFrame& frame) {
   // On the Client Side, act on the SPA frame by migrating to the new
   // preferred address, if server hopping is enabled.
   if (perspective_ == Perspective::IS_CLIENT && IsHandshakeConfirmed() &&
-      !path_validator_.HasPendingPathValidation() && server_ipv6_hopping_ ) {
+      server_ipv6_hopping_) {
+    // When skip_path_validation_ is enabled, process SPA frames even during
+    // pending validation (cancel existing validation and migrate immediately).
+    // When disabled, drop SPA frames if validation is already in progress.
+    if (!skip_path_validation_ && path_validator_.HasPendingPathValidation()) {
+      return false;
+    }
 
-      QUIC_DVLOG(1) << ENDPOINT << "Received SPA frame, migrating to new preferred address" << frame.ipv6_address;
-      if (received_server_preferred_address_.IsInitialized() && 
-          received_server_preferred_address_.host().IsIPv6()) {
-
-        // // Set this so the path validation doesn't fail
-        if (frame.ipv6_address != received_server_preferred_address_) {
-          QUIC_DVLOG(1) << ENDPOINT << "Setting the server preferred address to the random address" << frame.ipv6_address;
-          received_server_preferred_address_ = frame.ipv6_address;
-          // expected_server_preferred_address_ = frame.ipv6_address;
-          visitor_->OnServerPreferredAddressAvailable(frame.ipv6_address);
-          return true;
+    if (received_server_preferred_address_.IsInitialized() &&
+        received_server_preferred_address_.host().IsIPv6()) {
+      if (frame.ipv6_address != received_server_preferred_address_) {
+        if (skip_path_validation_ && path_validator_.HasPendingPathValidation()) {
+          path_validator_.CancelPathValidation();
         }
+        received_server_preferred_address_ = frame.ipv6_address;
+        visitor_->OnServerPreferredAddressAvailable(frame.ipv6_address);
+        return true;
       }
+    }
   }
   return false;
 }
@@ -2933,12 +2946,19 @@ void QuicConnection::ProcessUdpPacket(const QuicSocketAddress& self_address,
   } else if (default_path_.self_address != self_address &&
              expected_server_preferred_address_.IsInitialized() &&
              self_address.host().InSameSubnet(expected_server_preferred_address_.host(), 64)) {
-    // If the packet is received at the preferred address, treat it as if it is
-    // received on the original server address.
-    last_received_packet_info_.destination_address = default_path_.self_address;
-    last_received_packet_info_.actual_destination_address = self_address;
-    // Update the expected preferred address.
-    expected_server_preferred_address_ = self_address;
+    if (perspective_ == Perspective::IS_SERVER) {
+      // Server SPA hopping: update self_address to the new SPA address so that
+      // outgoing packets (including PATH_RESPONSE) use it as source.
+      default_path_.self_address = self_address;
+      last_received_packet_info_.actual_destination_address = self_address;
+      expected_server_preferred_address_ = self_address;
+    } else {
+      // Client: treat packet received at preferred address as if received at
+      // original server address.
+      last_received_packet_info_.destination_address = default_path_.self_address;
+      last_received_packet_info_.actual_destination_address = self_address;
+      expected_server_preferred_address_ = self_address;
+    }
   }
 
   if (!direct_peer_address_.IsInitialized()) {
@@ -3023,21 +3043,36 @@ void QuicConnection::ProcessUdpPacket(const QuicSocketAddress& self_address,
   RetirePeerIssuedConnectionIdsNoLongerOnPath();
 
 
-  // QUIX: Server-side and 
-  // On the server side, send a SPA every N packets after handshake is confirmed.
-  // TODO: This can ideally be moved to execute when an alarm fires instead of every N packets.
-  if (perspective_ == Perspective::IS_SERVER && IsHandshakeConfirmed() && server_ipv6_hopping_) {
-    if (stats_.packets_processed % migrate_every_n_packets_ == 0) {
-      visitor_->SendSpaFrame();
+  // QUIX: Server-side and client-side address hopping.
+  // Supports two trigger modes:
+  //   - Time-based (migrate_every_n_ms_ > 0): migrate after N ms elapsed
+  //   - Packet-based (fallback): migrate every N packets processed
+  if (IsHandshakeConfirmed()) {
+    bool should_migrate = false;
+    if (migrate_every_n_ms_ > 0) {
+      QuicTime now = clock_->ApproximateNow();
+      if (last_migration_time_ == QuicTime::Zero()) {
+        last_migration_time_ = now;
+      }
+      QuicTime::Delta interval =
+          QuicTime::Delta::FromMilliseconds(migrate_every_n_ms_);
+      if (now - last_migration_time_ >= interval) {
+        should_migrate = true;
+        last_migration_time_ = now;
+      }
+    } else {
+      if (stats_.packets_processed % migrate_every_n_packets_ == 0) {
+        should_migrate = true;
+      }
     }
-  }
-  
-  // QUIX: Client-side. Change the client's IP address every N packets after handshake is confirmed
-  // and transfer the connection to the new IP address.
-  if (perspective_ == Perspective::IS_CLIENT && IsHandshakeConfirmed() && client_ipv6_hopping_) {
-    if (stats_.packets_processed % migrate_every_n_packets_ == 0) {
-      // Tell session to perform migration. The session will then call the client_base visitor to perform the migration.
-      visitor_->PerformClientMigration();
+
+    if (should_migrate) {
+      if (perspective_ == Perspective::IS_SERVER && server_ipv6_hopping_) {
+        visitor_->SendSpaFrame();
+      }
+      if (perspective_ == Perspective::IS_CLIENT && client_ipv6_hopping_) {
+        visitor_->PerformClientMigration();
+      }
     }
   }
 
@@ -5850,8 +5885,16 @@ void QuicConnection::StartEffectivePeerMigration(AddressChangeType type) {
 
   // Save previous default path to the altenative path.
   if (previous_default_path.validated) {
-    // The old path is a validated path which the connection might revert back
-    // to later. Store it as the alternative path.
+    if (previous_default_path.send_algorithm == nullptr) {
+      // For PORT_CHANGE within subnet, send_algorithm was not captured earlier.
+      // Save it now so the connection can revert to this path later.
+      previous_default_path.rtt_stats.emplace();
+      previous_default_path.rtt_stats->CloneFrom(
+          *sent_packet_manager_.GetRttStats());
+      previous_default_path.send_algorithm =
+          sent_packet_manager_.OnConnectionMigration(
+              /*reset_send_algorithm=*/true);
+    }
     alternative_path_ = std::move(previous_default_path);
     QUICHE_DCHECK(alternative_path_.send_algorithm != nullptr);
   }
@@ -7338,6 +7381,7 @@ bool QuicConnection::MigratePath(const QuicSocketAddress& self_address,
                                self_address_change_type == NO_CHANGE) &&
                               (peer_address_change_type == PORT_CHANGE ||
                                peer_address_change_type == NO_CHANGE);
+  packet_creator_.FlushCurrentPacket();
   SetSelfAddress(self_address);
   UpdatePeerAddress(peer_address);
   default_path_.peer_address = peer_address;
@@ -7361,6 +7405,39 @@ bool QuicConnection::MigratePath(const QuicSocketAddress& self_address,
   }
   ++stats_.migration_count;
   return true;
+}
+
+void QuicConnection::MigratePathForSpa(
+    const QuicSocketAddress& new_peer_address) {
+  QUICHE_DCHECK(perspective_ == Perspective::IS_CLIENT);
+  if (!connected_) {
+    return;
+  }
+  // Remember old address so in-flight packets from it won't be discarded.
+  AddKnownServerAddress(default_path_.peer_address);
+  UpdatePeerAddress(new_peer_address);
+  default_path_.peer_address = new_peer_address;
+  ++stats_.peer_migration_count;
+  ++stats_.migration_count;
+}
+
+void QuicConnection::MigrateSelfAddressForHopping(
+    const QuicSocketAddress& new_self_address, QuicPacketWriter* writer,
+    bool owns_writer) {
+  QUICHE_DCHECK(perspective_ == Perspective::IS_CLIENT);
+  if (!connected_) {
+    if (owns_writer) {
+      delete writer;
+    }
+    return;
+  }
+  packet_creator_.FlushCurrentPacket();
+  SetSelfAddress(new_self_address);
+  if (writer_ != writer) {
+    SetQuicPacketWriter(writer, owns_writer);
+  }
+  ++stats_.self_migration_count;
+  ++stats_.migration_count;
 }
 
 void QuicConnection::OnPathValidationFailureAtClient(
@@ -7715,9 +7792,8 @@ void QuicConnection::ReversePathValidationResultDelegate::
         connection_->alternative_path_.server_connection_id ==
         connection_->default_path_.server_connection_id,
         /*prev_default_path_scid*/ connection_->alternative_path_.server_connection_id);
-  } else {
-    QUICHE_DCHECK(connection_->IsAlternativePath(
-        context->self_address(), context->effective_peer_address()));
+  } else if (connection_->IsAlternativePath(context->self_address(),
+                                              context->effective_peer_address())) {
     QUIC_CODE_COUNT_N(quic_kick_off_client_address_validation, 4, 6);
     QUIC_DVLOG(1) << "Mark alternative peer address "
                   << context->effective_peer_address() << " validated.";

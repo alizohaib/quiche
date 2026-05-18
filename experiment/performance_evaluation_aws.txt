@@ -1,0 +1,134 @@
+\section{Performance Evaluation}
+\label{sec:evaluation}
+
+We evaluate the throughput impact of QUIX address hopping under realistic
+wide-area network conditions. Our experiments measure application-layer
+goodput while varying the hopping frequency and direction (server-side,
+client-side, or bidirectional).
+
+\subsection{Experimental Setup}
+
+\paragraph{Testbed.}
+We deploy three AWS EC2 instances across two regions to create a realistic
+Internet path with non-trivial latency:
+\begin{itemize}
+  \item \textbf{Client:} c5.xlarge in us-west-1
+  \item \textbf{Proxy:} c5.xlarge in us-east-1
+  \item \textbf{Origin:} t3.medium in us-east-1 (co-located with proxy)
+\end{itemize}
+The measured round-trip time between client and proxy is 58\,ms, representative
+of a typical continental-scale Internet path. Bandwidth is uncapped (native EC2
+networking, measured at approximately 50\,Mbps goodput at baseline).
+
+\paragraph{Network configuration.}
+Each instance is assigned a delegated IPv6 /80 prefix via AWS DHCPv6 prefix
+delegation. We assign 256 individual /128 addresses from each prefix to the
+host interface, enabling the Linux kernel to select per-packet source addresses
+via the \texttt{IPV6\_PKTINFO} ancillary data in \texttt{sendmsg()}. The
+MASQUE proxy uses addresses from \texttt{2600:1f18:...:8bc4::/80} for
+server-side hopping, while the client uses addresses from
+\texttt{2600:1f1c:...:12f2::/80} for client-side hopping.
+
+\paragraph{Protocol stack.}
+The client establishes a QUIC connection to the proxy, negotiates a
+MASQUE CONNECT-IP tunnel~\cite{rfc9484}, and downloads a 100\,MB file from
+the origin via HTTP over the tunnel. The outer QUIC connection carries the
+address hopping mechanism; the inner HTTP transfer is unmodified.
+
+\subsection{Methodology}
+
+\paragraph{Ablation parameters.}
+We vary two independent parameters:
+\begin{enumerate}
+  \item \textbf{Hopping frequency:} 0 (baseline), 10, 25, 50, 100, 500, and
+    1000\,ms between consecutive address changes.
+  \item \textbf{Hopping direction:}
+    \begin{itemize}
+      \item \emph{Server-only:} The proxy periodically sends SPA
+        (Server Preferred Address) frames advertising a new IPv6 address.
+        The client validates the new path and migrates upon success.
+      \item \emph{Client-only:} The client periodically changes its own source
+        address (randomizing within its /120 prefix). The proxy validates the
+        new peer address via PATH\_CHALLENGE.
+      \item \emph{Both:} Simultaneous server and client hopping.
+    \end{itemize}
+\end{enumerate}
+Each configuration is repeated 5 times (total: $3 \times 7 \times 5 = 105$
+experiments). We verify data integrity via MD5 hash comparison after each
+transfer.
+
+\paragraph{Path validation.}
+All address changes are validated using QUIC's native path validation
+mechanism (PATH\_CHALLENGE / PATH\_RESPONSE). Validation is asynchronous:
+application data continues flowing on the current path while the new path
+is probed. A migration occurs only after successful validation. This design
+ensures that address hopping does not disrupt ongoing transfers, provided
+validation completes before the next hop is triggered.
+
+\paragraph{Metrics.}
+Our primary metric is \emph{normalized goodput}: the application-layer
+throughput of each configuration divided by the maximum baseline throughput
+(freq=0). We compute goodput as $\text{file\_size} / \text{transfer\_time}$,
+where transfer time spans from the start of the HTTP request to completion
+of the download.
+
+As secondary metrics, we report: (i)~the number of completed address
+migrations per transfer, (ii)~per-migration subconnection duration, and
+(iii)~unique IPv6 addresses observed in packet captures, confirming that
+address diversity manifests at the IP layer.
+
+\subsection{Results}
+
+\paragraph{Throughput impact.}
+Figure~\ref{fig:normalized-throughput} shows the normalized goodput across
+all configurations. For hopping frequencies at or above the path RTT
+(i.e., $\geq 50$\,ms), we observe less than 5\% throughput degradation
+compared to the no-hopping baseline. Even at the most aggressive frequency
+of 10\,ms---triggering a new address change every 10\,ms despite the 58\,ms
+validation RTT---throughput decreases by at most 19\%.
+
+This result confirms that asynchronous path validation effectively hides
+the cost of address hopping: since data continues on the old path while the
+new path validates, the only overhead is the bandwidth consumed by
+PATH\_CHALLENGE/PATH\_RESPONSE probes and the brief period where the
+path validator is occupied (preventing immediate processing of a subsequent
+hop request).
+
+\paragraph{Address diversity.}
+Packet captures confirm that each migration produces a distinct source
+address at the IPv6 layer. For a 15-second transfer at 100\,ms frequency,
+we observe approximately 150 unique source addresses on the wire---one per
+hop. This demonstrates that QUIX achieves genuine network-layer address
+diversity, not merely logical connection-layer migration.
+
+\paragraph{Data integrity.}
+All 105 experiments pass MD5 verification, confirming that address hopping
+introduces no data corruption regardless of frequency or direction.
+
+\paragraph{Direction comparison.}
+Server-side and client-side hopping exhibit similar throughput profiles.
+Bidirectional hopping (both endpoints changing addresses simultaneously)
+shows marginally higher variance but comparable median throughput, as
+the asynchronous validation model handles concurrent migrations from
+both directions.
+
+\subsection{Discussion}
+
+The near-zero overhead of address hopping at frequencies $\geq$ RTT has
+a natural explanation: QUIC's path validation completes in exactly one
+RTT (one challenge-response exchange). When the hopping interval exceeds
+the RTT, each validation completes before the next hop is triggered,
+meaning the connection is always operating on a validated path with no
+contention on the path validator.
+
+At sub-RTT frequencies (10\,ms and 25\,ms), some hop requests arrive while
+a previous validation is still in flight. Since QUIC permits only one
+outstanding path validation at a time, the new request cancels the
+in-progress validation and starts fresh. This causes the effective hopping
+rate to be capped at approximately one hop per RTT regardless of the
+configured frequency, with a small throughput cost from the wasted
+PATH\_CHALLENGE packets.
+
+These results suggest that in practice, the optimal hopping frequency
+is approximately equal to the path RTT---achieving maximum address
+diversity without measurable throughput cost.

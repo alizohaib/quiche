@@ -28,5 +28,5 @@ RUN ARCH=$(dpkg --print-architecture) && \
 WORKDIR /src/quiche
 COPY . .
 
-# Build masque_server and masque_client with Clang
-RUN bazel build //quiche:masque_server //quiche:masque_client --noshow_progress
+# Build masque_server, masque_client, and quic_server with Clang
+RUN bazel build //quiche:masque_server //quiche:masque_client //quiche:quic_server --noshow_progress

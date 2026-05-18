@@ -1467,6 +1467,15 @@ class QUICHE_EXPORT QuicConnection
     expected_server_preferred_address_ = expected_server_preferred_address;
   }
 
+  // SPA-triggered peer address migration. Flushes pending packets, updates
+  // the peer address, and skips CID consumption (server initiated the change).
+  void MigratePathForSpa(const QuicSocketAddress& new_peer_address);
+
+  // Client-side self address migration for privacy hopping. Updates the self
+  // address and writer without consuming CIDs or path validation.
+  void MigrateSelfAddressForHopping(const QuicSocketAddress& new_self_address,
+                                    QuicPacketWriter* writer, bool owns_writer);
+
   // TODO(rch): Remove this method once Envoy is no longer using it.
   const QuicSocketAddress& sent_server_preferred_address() const {
     return expected_server_preferred_address_;
@@ -2618,7 +2627,11 @@ class QUICHE_EXPORT QuicConnection
 
   bool client_ipv6_hopping_ = false;
   bool server_ipv6_hopping_ = false;
+  bool skip_path_validation_ = false;
+  bool skip_cwnd_reset_ = false;
   int migrate_every_n_packets_ = 100;
+  int migrate_every_n_ms_ = 0;
+  QuicTime last_migration_time_ = QuicTime::Zero();
 
   bool wf_defense_enabled_ = false;
 

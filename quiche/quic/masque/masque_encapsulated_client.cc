@@ -339,11 +339,15 @@ MasqueEncapsulatedClient::masque_encapsulated_client_session() {
 
 QuicByteCount MaxPacketSizeForEncapsulatedConnections(
     MasqueClient* underlying_masque_client) {
+  constexpr QuicByteCount kMaxIpUdpHeaderSize = 48;
   QuicByteCount max_packet_size =
       underlying_masque_client->masque_client_session()
           ->GetGuaranteedLargestDatagramPayload() -
       /* max length of quarter stream ID */ sizeof(QuicStreamId) -
       /* context ID set to zero */ sizeof(uint8_t);
+  if (underlying_masque_client->masque_mode() == MasqueMode::kConnectIp) {
+    max_packet_size -= kMaxIpUdpHeaderSize;
+  }
   QUICHE_CHECK_GE(max_packet_size, 1200u)
       << "RFC 9000 requires QUIC max packet size to be above 1200 bytes";
   return max_packet_size;

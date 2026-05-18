@@ -118,9 +118,24 @@ DEFINE_QUICHE_COMMAND_LINE_FLAG(
     "received in the preferred server address frames.");
 
 DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, skip_path_validation, false,
+    "If set to true, skip PATH_CHALLENGE/RESPONSE validation for SPA-triggered "
+    "migrations. SPA frames are already authenticated inside QUIC encryption.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    bool, skip_cwnd_reset, false,
+    "If set to true, preserve congestion window across SPA migrations instead "
+    "of resetting to initial window. Safe when path characteristics are unchanged.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
     int, migrate_every_n_packets, 100,
     "Perform migration"
     "every n packets. Defaults to 100.");
+
+DEFINE_QUICHE_COMMAND_LINE_FLAG(
+    int, migrate_every_n_ms, 0,
+    "Perform migration every n milliseconds. "
+    "If set to > 0, overrides migrate_every_n_packets.");
 
 namespace quic {
 
@@ -513,16 +528,23 @@ int RunMasqueClient(int argc, char* argv[]) {
       bool server_hopping = quiche::GetQuicheCommandLineFlag(FLAGS_server_hopping);
       bool is_wf_defense_enabled = quiche::GetQuicheCommandLineFlag(FLAGS_enable_wf_defense);
       int migrate_every_n_packets = quiche::GetQuicheCommandLineFlag(FLAGS_migrate_every_n_packets);
+      bool skip_path_validation = quiche::GetQuicheCommandLineFlag(FLAGS_skip_path_validation);
+      bool skip_cwnd_reset = quiche::GetQuicheCommandLineFlag(FLAGS_skip_cwnd_reset);
 
+      config.SetActiveConnectionIdLimitToSend(255);
       config.SetConnectionOptionsToSend(ParseQuicTagVector("SPAD"));
       config.SetClientConnectionOptions(ParseQuicTagVector("SPAD"));
 
       config.SetClientIpv6Hopping(client_hopping);
       config.SetServerIpv6Hopping(server_hopping);
+      config.SetSkipPathValidation(skip_path_validation);
+      config.SetSkipCwndReset(skip_cwnd_reset);
 
       config.SetDefenseEnabled(is_wf_defense_enabled);
 
       config.SetMigrateEveryNPackets(migrate_every_n_packets);
+      int migrate_every_n_ms = quiche::GetQuicheCommandLineFlag(FLAGS_migrate_every_n_ms);
+      config.SetMigrateEveryNMs(migrate_every_n_ms);
 
       // Initialize random number generators
       std::random_device rd;
@@ -610,8 +632,7 @@ int RunMasqueClient(int argc, char* argv[]) {
       while (stream->time_to_response_complete().IsInfinite()) {
         event_loop->RunEventLoopOnce(QuicTime::Delta::FromMilliseconds(50));
       }
-      // Print the response body to stdout.
-      std::string response_body = masque_client->latest_response_body();
+      // Response received; body is discarded (can be large).
     } else {
       // For bind, DNS has to be done on client in the encapsulated client.
       std::unique_ptr<MasqueEncapsulatedClient> encapsulated_client =

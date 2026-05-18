@@ -48,32 +48,34 @@ namespace quic {
 
 namespace {
 
+  static uint64_t spa_address_counter = 0;
+
   QuicSocketAddress GetNewPreferredAddressToSend(QuicSocketAddress prev_addr, int prefix_len) {
 
     quiche::QuicheIpAddress address;
     uint8_t address_bytes[16] = {};
 
-    quiche::QuicheRandom::GetInstance()->RandBytes(&address_bytes, 16);
+    // Start with the previous address as a base
+    memcpy(address_bytes, prev_addr.host().ToPackedString().data(), 16);
 
+    // Increment the sequential counter
+    ++spa_address_counter;
+
+    // Write the counter into the suffix (host portion) after the prefix
     int num_bits = prefix_len;
     int num_full_bytes = num_bits / 8;
-    int remaining_bits = num_bits % 8;
+    int suffix_bytes = 16 - num_full_bytes;
 
-    // Copy the full bytes
-    memcpy(address_bytes, prev_addr.host().ToPackedString().data(), num_full_bytes);
-
-    // If there are remaining bits, copy them
-    if (remaining_bits > 0) {
-      uint8_t mask = 0xFF << (8 - remaining_bits);
-      size_t i = num_full_bytes;
-      address_bytes[i] = (address_bytes[i] & ~mask);
+    // Zero the suffix, then write counter in big-endian into the last bytes
+    memset(address_bytes + num_full_bytes, 0, suffix_bytes);
+    for (int i = 0; i < suffix_bytes && i < 8; ++i) {
+      address_bytes[15 - i] = static_cast<uint8_t>(spa_address_counter >> (i * 8));
     }
 
     address.FromPackedString(reinterpret_cast<const char *>(address_bytes),
                              sizeof(address_bytes));
 
     return QuicSocketAddress(address, prev_addr.port());
-    // return address;
   }
 
 class ClosedStreamsCleanUpDelegate : public QuicAlarm::Delegate {

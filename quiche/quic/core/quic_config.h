@@ -438,8 +438,17 @@ class QUICHE_EXPORT QuicConfig {
   void SetServerIpv6Hopping(bool enabled);
   bool IsServerIpv6Hopping() const;
 
+  void SetSkipPathValidation(bool enabled);
+  bool IsSkipPathValidation() const;
+
+  void SetSkipCwndReset(bool enabled);
+  bool IsSkipCwndReset() const;
+
   void SetMigrateEveryNPackets(int n);
   int GetMigrateEveryNPackets() const;
+
+  void SetMigrateEveryNMs(int ms);
+  int GetMigrateEveryNMs() const;
 
   void SetServerHoppingPrefix(int n);
   int GetServerHoppingPrefix() const;
@@ -801,11 +810,14 @@ class QUICHE_EXPORT QuicConfig {
 
   bool client_ipv6_hopping_;
   bool server_ipv6_hopping_;
+  bool skip_path_validation_;
+  bool skip_cwnd_reset_;
   int server_hopping_prefix_size_;
   int client_hopping_prefix_size_;
 
   bool wf_defense_enabled_;
   int migrate_every_n_packets_;
+  int migrate_every_n_ms_;
 
   double front_wnd_;
   int front_samples_;
